@@ -1,0 +1,4 @@
+.venv/
+meetrec
+__pycache__/
+vocabulaire.txt

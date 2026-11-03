@@ -1,0 +1,3 @@
+# Scripts Windows en fin de ligne CRLF, y compris dans l'archive ZIP de GitHub.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

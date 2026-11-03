@@ -1,0 +1,4 @@
+essai-vitesse.wav : 30 s (de 1:00 à 1:30) du chapitre premier de « Les anciens canadiens »,
+de Philippe Aubert de Gaspé, lu en français par un bénévole de LibriVox.
+Enregistrement LibriVox, domaine public : https://archive.org/details/les_anciens_canadiens_2203_librivox
+Converti en 16 kHz mono. Sert seulement à mesurer la vitesse de transcription de l'ordinateur.

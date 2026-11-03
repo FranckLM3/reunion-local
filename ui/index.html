@@ -1,0 +1,1848 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Réunion</title>
+<style>
+:root {
+  /* Jetons de couleur, copiés ici : la page tourne hors ligne. Habillage neutre, police du système. */
+  --accent: #0f6e66; --accent-fort: #0b5550; --accent-clair: #e2f1ee; --focus: #0f6e66; --papier: #f6f7f7;
+  --ink: #1c2124; --body: #3f474c; --body-soft: #5a6369; --surface: #fff; --bord: #dadfe1; --bord-fort: #7d878c;
+  --danger: #8f2230; --danger-fond: #fdedee; --danger-bord: #e8babf;
+  --alerte: #7a5d1b; --alerte-fond: #fdf8ed; --alerte-bord: #e8daba;
+  --succes: #1d7b4f; --rec: #c42d3c; --rec-fort: #a42532;
+  --loc-1: #0f6e66; --loc-2: #3a5fc8; --loc-3: #876820; --loc-4: #8a43bd; --loc-5: #b0491a;
+  --note: #fff7d9; --note-bord: #c9a227;
+  --rayon: 8px; --ombre: 0 1px 2px rgb(28 33 36 / .06), 0 4px 16px rgb(28 33 36 / .06);
+  --vite: 150ms;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--body); background: var(--papier); }
+h1, h2, h3, h4 { color: var(--ink); margin: 0; font-weight: 650; letter-spacing: -.01em; }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ico { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.evite { position: absolute; left: -9999px; }
+.evite:focus { left: 8px; top: 8px; z-index: 50; background: var(--surface); padding: 8px 12px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Gabarit */
+.page { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
+.cote { background: var(--surface); border-right: 1px solid var(--bord); padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.marque { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.marque h1 { font-size: 20px; }
+.logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; }
+.principal { padding: 28px clamp(16px, 4vw, 48px) 40px; min-width: 0; }
+#contenu:focus { outline: none; }
+.colonne { max-width: 880px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 14px; border-radius: var(--rayon); border: 1px solid var(--bord-fort); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 15px; text-decoration: none; transition: background var(--vite), border-color var(--vite); }
+.btn:hover { border-color: var(--accent); background: var(--accent-clair); }
+.btn.principal-btn { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.principal-btn:hover { background: var(--accent-fort); }
+.btn.rec { background: var(--rec); border-color: var(--rec); color: #fff; }
+.btn.rec:hover { background: var(--rec-fort); }
+.btn.danger { color: var(--danger); }
+.btn.lien { border: 0; background: none; color: var(--accent-fort); padding: 4px 6px; min-height: 32px; text-decoration: underline; text-underline-offset: 3px; }
+.btn.petit { min-height: 32px; padding: 4px 10px; font-size: 14px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-enreg { width: 100%; min-height: 52px; font-size: 17px; }
+.pastille-rec { width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgb(255 255 255 / .35); }
+.pastille-rec.carre { border-radius: 2px; }
+
+.local { display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 14px; color: var(--ink); flex-wrap: wrap; }
+.local .ico { color: var(--accent); }
+.local .btn.lien { margin-left: auto; font-size: 13px; min-height: 24px; padding: 0 4px; }
+.cherche { width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); background: var(--surface); }
+.cherche:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.jour { font-size: 13px; font-weight: 600; color: var(--body-soft); padding: 8px 8px 4px; }
+.liste { list-style: none; margin: 0; padding: 0; }
+.liste a { display: block; padding: 10px; border-radius: var(--rayon); color: inherit; text-decoration: none; }
+.liste a:hover { background: var(--papier); }
+.liste a[aria-current=true] { background: var(--accent-clair); }
+.liste .t { display: block; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.liste .m { font-size: 13px; color: var(--body-soft); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.etat { font-size: 12px; font-weight: 600; padding: 0 8px; border-radius: 999px; border: 1px solid var(--bord); }
+.etat.pret { color: var(--succes); }
+.etat.cours { color: var(--alerte); background: var(--alerte-fond); border-color: var(--alerte-bord); }
+.etat.echec { color: var(--danger); background: var(--danger-fond); border-color: var(--danger-bord); }
+.etat.rec { color: var(--rec); border-color: var(--danger-bord); display: inline-flex; gap: 4px; align-items: center; }
+.etat.rec::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--rec); }
+.compteur { font-size: 14px; color: var(--body-soft); }
+.bas-cote { margin-top: auto; }
+.hero { display: grid; gap: 10px; }
+.donner summary { color: var(--accent-fort); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.donner label { display: block; font-weight: 600; color: var(--ink); margin: 10px 0 4px; }
+.donner input { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); }
+.resume { margin-top: 20px; color: var(--ink); }
+.conseille { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-top: 12px; font-size: 14px; color: var(--ink); }
+.conseille .etiq { font-size: 12px; font-weight: 700; padding: 0 8px; border: 1px solid var(--bord-fort); border-radius: 999px; color: var(--body); }
+.conseille p { flex: 1; min-width: 200px; }
+
+.bandeau { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--rayon); border: 1px solid var(--bord); background: var(--surface); font-size: 15px; color: var(--ink); }
+.bandeau > div { flex: 1; min-width: 0; }
+.bandeau .ico { margin-top: 2px; }
+.bandeau.jaune { background: var(--alerte-fond); border-color: var(--alerte-bord); }
+.bandeau.jaune .ico { color: var(--alerte); }
+.bandeau.rouge { background: var(--danger-fond); border-color: var(--danger-bord); }
+.bandeau.rouge .ico { color: var(--danger); }
+.bandeau .actions { margin-top: 8px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.note-aide { font-size: 14px; color: var(--body-soft); }
+progress { width: 100%; height: 10px; accent-color: var(--accent); }
+progress + b { white-space: nowrap; }
+.retour-mobile { display: none; }
+.dl { margin-top: 16px; font-size: 14px; color: var(--body-soft); display: grid; gap: 4px; }
+.global { position: sticky; top: 0; z-index: 30; border-radius: 0; }
+.fait { font-size: 13px; font-weight: 600; color: var(--succes); }
+.fait.ko, .ko-t { color: var(--danger); font-size: 14px; font-weight: 600; }
+
+/* Accueil vide */
+.vide { max-width: 520px; margin: 10vh auto 0; text-align: center; }
+.vide h2 { font-size: 24px; margin-bottom: 8px; }
+.conseils { text-align: left; margin: 28px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.conseils li { display: flex; gap: 10px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); }
+.conseils .ico { color: var(--accent); margin-top: 3px; }
+
+/* Enregistrement */
+.enreg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.carte { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); box-shadow: var(--ombre); padding: 20px; }
+.chrono { display: flex; align-items: center; gap: 12px; }
+.chrono .point { width: 14px; height: 14px; border-radius: 50%; background: var(--rec); animation: pouls 1.4s ease-in-out infinite; }
+@keyframes pouls { 50% { opacity: .4; } }
+.chrono b { font-size: 44px; font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.jauges { display: grid; gap: 12px; margin: 16px 0; }
+.jauge { display: grid; grid-template-columns: 150px 1fr 60px; gap: 10px; align-items: center; font-size: 15px; }
+.jauge .barre { height: 10px; border-radius: 5px; background: var(--papier); border: 1px solid var(--bord); overflow: hidden; }
+.jauge .barre i { display: block; height: 100%; background: var(--accent); transition: width 200ms; }
+.jauge b { color: var(--ink); }
+.empile { display: grid; gap: 8px; margin-bottom: 16px; }
+.champ-note label { display: block; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.champ-note input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); }
+.champ-note input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.vos-notes { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.vos-notes li { display: flex; gap: 10px; font-size: 15px; padding: 6px 10px; background: var(--note); border-left: 3px solid var(--note-bord); border-radius: 4px; color: var(--ink); }
+.vos-notes time { font-variant-numeric: tabular-nums; color: var(--body-soft); }
+.verif { font-style: italic; color: var(--ink); margin-top: 6px; }
+
+.direct { border: 1px dashed var(--bord-fort); border-radius: var(--rayon); background: repeating-linear-gradient(135deg, #fbfbfb 0 8px, #f3f4f4 8px 16px); }
+.direct header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px dashed var(--bord-fort); }
+.direct.replie header { border-bottom: 0; }
+.direct h3 { font-size: 16px; }
+.direct header .btn { margin-left: auto; }
+.retard { font-size: 13px; font-weight: 600; color: var(--alerte); background: var(--alerte-fond); border: 1px solid var(--alerte-bord); border-radius: 999px; padding: 0 8px; }
+.direct .mention { padding: 10px 14px 0; font-size: 14px; color: var(--body-soft); }
+.morceaux { list-style: none; margin: 0; padding: 8px 14px 14px; display: grid; gap: 8px; max-height: 640px; overflow: auto; }
+.morceaux li { display: grid; grid-template-columns: 52px 1fr; gap: 2px 10px; font-size: 15px; }
+.morceaux time { font-size: 13px; color: var(--body-soft); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.morceaux .qui { font-size: 13px; font-weight: 650; color: var(--body); }
+.morceaux p { grid-column: 2; color: var(--body); }
+.morceaux li.n p { background: var(--note); border-left: 3px solid var(--note-bord); padding: 2px 8px; color: var(--ink); }
+.direct.grise .morceaux { opacity: .6; }
+.direct .revenir { margin: 0 14px 12px; }
+
+/* Réunion ouverte */
+.tete { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.tete h2 { font-size: clamp(22px, 3vw, 28px); overflow-wrap: anywhere; }
+.tete h2 button { all: unset; cursor: text; border-radius: 4px; }
+.tete h2 button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tete .meta { font-size: 14px; color: var(--body-soft); margin-top: 4px; }
+.titre-champ { width: 100%; padding: 2px 8px; border: 1px solid var(--accent); border-radius: var(--rayon); font-size: clamp(20px, 3vw, 26px); font-weight: 650; color: var(--ink); }
+.voix { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 12px 0 6px; align-items: start; }
+.voix-carte { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 10px 12px; display: grid; gap: 4px; align-content: start; border-left: 4px solid var(--c); }
+.voix-carte.prop { border-style: dashed; border-left-style: solid; background: #fcfdfd; }
+.voix-carte .nom { font-weight: 650; color: var(--ink); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.voix-carte .nom em { font-style: italic; }
+.nom-btn { all: unset; cursor: pointer; border-radius: 4px; text-decoration: underline dotted; text-underline-offset: 4px; }
+.nom-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.voix-carte small { font-size: 13px; color: var(--body-soft); }
+.conf { font-size: 13px; font-weight: 600; color: var(--accent-fort); }
+.voix-carte .actions { gap: 6px; }
+.voix-carte input[type=text] { width: 100%; min-height: 36px; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 6px; }
+.suggest { margin: 4px 0 0; padding: 4px; list-style: none; border: 1px solid var(--bord); border-radius: 6px; background: var(--surface); font-size: 14px; max-height: 260px; overflow: auto; }
+.suggest li { padding: 6px; border-radius: 4px; cursor: pointer; }
+.suggest li[aria-selected=true] { background: var(--accent-clair); }
+.suggest li.deja { color: var(--body-soft); }
+.suggest li.sep { border-top: 1px solid var(--bord); }
+.suggest small { color: var(--body-soft); }
+details.menu { position: relative; }
+details.menu > summary { list-style: none; }
+details.menu > summary::-webkit-details-marker { display: none; }
+.menu-liste { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; min-width: 230px; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); box-shadow: var(--ombre); padding: 4px; display: grid; }
+.menu-liste.droite-m { left: auto; right: 0; }
+.menu-liste button { border: 0; background: none; text-align: left; padding: 10px 12px; border-radius: 6px; min-height: 40px; }
+.menu-liste button:hover, .menu-liste button:focus-visible { background: var(--papier); }
+.menu-liste .titre-m { padding: 6px 12px; font-size: 13px; color: var(--body-soft); }
+.menu-liste .danger, .danger-t { color: var(--danger); }
+.flottant { position: fixed; z-index: 40; }
+.cr { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 16px 18px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; }
+.participants { margin-top: 16px; font-size: 15px; color: var(--ink); display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.participants input { flex: 1; min-width: 200px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 6px; }
+.case { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.case input { accent-color: var(--accent); width: 16px; height: 16px; margin-top: 2px; flex: none; }
+
+.outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 8px; }
+.outils .cherche { flex: 1; min-width: 200px; }
+.outils select { min-height: 40px; padding: 6px 10px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); background: var(--surface); max-width: 100%; }
+.onglets { display: flex; gap: 4px; border-bottom: 1px solid var(--bord); margin-top: 16px; }
+.onglets button { border: 0; background: none; padding: 8px 12px; font-weight: 600; color: var(--body-soft); border-bottom: 3px solid transparent; }
+.onglets button[aria-selected=true] { color: var(--ink); border-color: var(--accent); }
+
+.lignes { list-style: none; margin: 0; padding: 0; }
+.ligne { display: grid; grid-template-columns: 64px 1fr; gap: 2px 14px; padding: 12px 8px; border-top: 1px solid var(--bord); }
+.ligne:focus-visible { outline-offset: -2px; }
+.ligne.actif { background: linear-gradient(90deg, var(--accent-clair), transparent 80%); }
+.heure { border: 0; background: none; padding: 2px 0; font-size: 14px; color: var(--body-soft); font-variant-numeric: tabular-nums; text-align: left; text-decoration: underline dotted; text-underline-offset: 3px; align-self: start; }
+.heure:hover { color: var(--accent-fort); }
+.heure:disabled { text-decoration: none; cursor: default; color: var(--body-soft); }
+.qui { border: 0; background: none; padding: 0; font-size: 14px; font-weight: 650; color: var(--c); display: inline-flex; align-items: center; gap: 6px; text-align: left; }
+.qui::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.qui.prop { font-style: italic; }
+.ligne p { grid-column: 2; color: var(--ink); cursor: text; overflow-wrap: anywhere; }
+.ligne textarea { grid-column: 2; width: 100%; min-height: 60px; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 6px; }
+mark { background: #fde3a7; color: inherit; border-radius: 2px; }
+mark.courant { background: #f5b84a; }
+.ligne.note-l { background: var(--note); border-left: 3px solid var(--note-bord); border-top-color: var(--alerte-bord); }
+.note-tag { font-size: 13px; font-weight: 650; color: var(--alerte); display: inline-flex; gap: 6px; align-items: center; }
+.note-tag .ico { width: 15px; height: 15px; }
+.note-tag .btn { color: var(--alerte); }
+
+.lecteur { position: sticky; bottom: 0; margin-top: 16px; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); box-shadow: 0 -2px 16px rgb(28 33 36 / .08); padding: 10px 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 8px 12px; align-items: center; z-index: 4; }
+.lecteur .btns { display: flex; gap: 4px; }
+.rond { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--bord-fort); background: var(--surface); display: grid; place-items: center; color: var(--ink); }
+.rond.play { background: var(--accent); border-color: var(--accent); color: #fff; }
+.piste { display: flex; align-items: center; gap: 8px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--body-soft); min-width: 0; }
+.piste input { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.lecteur .droite { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lecteur select { min-height: 36px; border: 1px solid var(--bord-fort); border-radius: 6px; background: var(--surface); padding: 2px 6px; }
+.suivre { font-size: 13px; grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; color: var(--body-soft); }
+.note-lecteur { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.note-lecteur input { flex: 1; min-width: 160px; min-height: 40px; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 6px; }
+
+/* Transcription en cours */
+.etapes { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 8px; }
+.etapes li { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+.etapes .ok { color: var(--succes); }
+.etapes .cours { font-weight: 650; color: var(--ink); }
+.etapes .attente { color: var(--body-soft); }
+.rondpt { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--bord-fort); flex: none; }
+.cours .rondpt { border-color: var(--accent); border-top-color: transparent; animation: tourne 1s linear infinite; }
+@keyframes tourne { to { transform: rotate(360deg); } }
+.fin { font-size: 22px; font-weight: 650; color: var(--ink); }
+.fin span { font-weight: 400; font-size: 17px; color: var(--body); }
+
+/* Erreur */
+.erreur-bloc { margin-top: 20px; border: 1px solid var(--danger-bord); background: var(--danger-fond); border-radius: var(--rayon); padding: 16px 18px; }
+.erreur-bloc h3 { color: var(--danger); font-size: 17px; display: flex; gap: 8px; align-items: flex-start; }
+.erreur-bloc p { margin-top: 6px; color: var(--ink); }
+.erreur-bloc .actions { margin-top: 12px; }
+.journal { margin-top: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--bord); border-radius: 6px; font-size: 14px; }
+.journal code { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--ink); overflow-wrap: anywhere; user-select: all; }
+
+/* Réglages */
+.retour { margin-bottom: 12px; }
+.reglage { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 16px 18px; margin-top: 12px; }
+.reglage h3 { font-size: 16px; }
+.reglage input[type=text], .reglage input[type=password], .reglage textarea { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); background: var(--surface); }
+.reglage textarea { min-height: 120px; }
+.ligne-r { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.ligne-r input { flex: 1; min-width: 160px; }
+.temoin { font-size: 13px; font-weight: 600; color: var(--succes); }
+.voix-connues { list-style: none; margin: 8px 0 0; padding: 0; }
+.voix-connues li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--bord); font-size: 15px; }
+.voix-connues li:first-child { border-top: 0; }
+.voix-connues small { color: var(--body-soft); display: block; font-size: 13px; }
+details.avance { margin-top: 16px; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); }
+details.avance > summary { padding: 14px 18px; font-weight: 650; color: var(--ink); cursor: pointer; }
+details.avance .contenu { padding: 0 18px 16px; display: grid; gap: 4px; }
+details.avance h4 { font-size: 15px; margin-top: 12px; }
+details.avance fieldset { border: 0; border-top: 1px solid var(--bord); margin: 8px 0 0; padding: 12px 0 0; display: grid; gap: 6px; min-width: 0; }
+details.avance legend { font-weight: 650; color: var(--ink); padding: 0; }
+.case.gros { font-size: 15px; align-items: center; flex-wrap: wrap; }
+.sel { width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); background: var(--surface); }
+label.champ { display: block; font-weight: 600; color: var(--ink); margin: 8px 0 4px; font-size: 15px; }
+.installation { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.installation li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ok-i { color: var(--succes); }
+.ko-i { color: var(--danger); }
+.etapes-agenda { margin: 8px 0; padding-left: 20px; font-size: 15px; }
+.chemin { flex: 1; min-width: 0; overflow-wrap: anywhere; font: 14px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); }
+.sous summary { color: var(--accent-fort); cursor: pointer; text-decoration: underline; }
+
+/* Premier lancement */
+.accueil1 { max-width: 620px; margin: 6vh auto; }
+.etape-n { font-size: 14px; color: var(--body-soft); display: flex; justify-content: space-between; align-items: center; }
+.points { display: flex; gap: 6px; margin: 10px 0 20px; }
+.points i { height: 6px; flex: 1; border-radius: 3px; background: var(--bord); }
+.points i.f { background: var(--accent); }
+.coches { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
+.coches li { display: flex; gap: 10px; align-items: center; }
+.coches .ok { color: var(--succes); }
+.coches .cours { font-weight: 650; color: var(--ink); }
+.coches .attente { color: var(--body-soft); }
+.accueil1 label.champ { margin-top: 14px; }
+.accueil1 input[type=text] { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); }
+
+dialog { border: 0; border-radius: 12px; padding: 22px; max-width: 460px; width: calc(100% - 32px); box-shadow: 0 20px 60px rgb(0 0 0 / .25); color: var(--body); }
+dialog::backdrop { background: rgb(28 33 36 / .5); }
+dialog h3 { font-size: 19px; margin-bottom: 8px; }
+dialog label { display: block; font-weight: 600; color: var(--ink); margin-top: 12px; }
+dialog label.case { font-weight: 400; }
+dialog input[type=number], dialog select { width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid var(--bord-fort); border-radius: var(--rayon); margin-top: 4px; }
+dialog .actions { justify-content: flex-end; margin-top: 18px; }
+dialog ul { padding-left: 20px; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; background: var(--ink); color: #fff; border-radius: var(--rayon); padding: 10px 14px; display: flex; gap: 12px; align-items: center; box-shadow: var(--ombre); max-width: calc(100% - 32px); }
+.toast .btn.lien { color: #fff; }
+
+@media (max-width: 899px) {
+  .page { grid-template-columns: 1fr; }
+  .cote { border-right: 0; border-bottom: 1px solid var(--bord); position: static; height: auto; }
+  .page.detail .cote { display: none; }
+  .page.detail .retour-mobile { display: inline-flex; margin-bottom: 12px; }
+  .page.liste-seule .principal { display: none; }
+  .enreg { grid-template-columns: 1fr; }
+  .jauge { grid-template-columns: 1fr 52px; }
+  .jauge .barre { grid-column: 1 / -1; grid-row: 2; }
+  .ligne { grid-template-columns: 1fr; padding: 12px 4px; }
+  .ligne p, .ligne textarea { grid-column: 1; }
+  .ligne .entete { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .lecteur { grid-template-columns: 1fr; }
+  .lecteur .btns { justify-content: center; }
+  .lecteur .droite { justify-content: space-between; }
+  .principal { padding: 16px 16px 32px; }
+  .btn, .btn.lien, .btn.petit, .rond, .cherche, .liste a, .heure, .qui, .menu-liste button, .onglets button { min-height: 44px; }
+  .nom-btn, .tete h2 button { min-height: 44px; display: inline-flex; align-items: center; }
+  .outils select, .lecteur select, .piste input { min-height: 44px; }
+  .chrono b { font-size: 36px; }
+  .voix { grid-template-columns: 1fr; }
+}
+@media (min-width: 900px) { .ligne .entete { display: contents; } .ligne .entete > :nth-child(2) { grid-column: 2; grid-row: 1; } .ligne .entete > :first-child { grid-row: 1 / span 2; } }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke-width="3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l12-7z" fill="currentColor"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+  <symbol id="i-headset" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1"/><rect x="17" y="14" width="4" height="6" rx="1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 21h4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 11v2"/></symbol>
+  <symbol id="i-rew" viewBox="0 0 24 24"><path d="M11 7 5 12l6 5V7zM19 7l-6 5 6 5V7z"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M13 7l6 5-6 5V7zM5 7l6 5-6 5V7z"/></symbol>
+</svg>
+<a class="evite" href="#contenu">Aller au contenu</a>
+<div class="bandeau rouge global" id="hors-ligne" role="alert" hidden><svg class="ico" aria-hidden="true"><use href="#i-alert"/></svg><p><b>Réunion ne répond plus.</b> Relancez l'application Réunion. Cette page réessaie toutes les 5 s.</p></div>
+<div class="sr" id="annonce" aria-live="polite"></div>
+
+<main class="principal" id="accueil1" hidden></main>
+
+<div class="page" id="page" hidden>
+  <aside class="cote" aria-label="Réunions">
+    <div class="marque"><span class="logo" aria-hidden="true"><svg class="ico"><use href="#i-wave"/></svg></span><h1>Réunion</h1></div>
+    <div id="bandeau-cote"></div>
+    <button class="btn rec btn-enreg" id="bouton-enreg" type="button"><span class="pastille-rec" aria-hidden="true"></span><span>Enregistrer</span></button>
+    <p class="local"><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg>Tout reste sur cet ordinateur. <button class="btn lien" type="button" id="ce-qui-sort">Ce qui sort</button></p>
+    <input class="cherche" id="cherche-g" type="search" placeholder="Rechercher dans les réunions" aria-label="Rechercher dans les réunions" autocomplete="off">
+    <nav aria-label="Liste des réunions" id="liste-nav"></nav>
+    <div class="bas-cote"><a class="btn" href="#reglages" style="width:100%"><svg class="ico" aria-hidden="true"><use href="#i-gear"/></svg>Réglages</a></div>
+  </aside>
+  <main class="principal" id="contenu" tabindex="-1">
+    <a class="btn lien retour-mobile" href="#"><svg class="ico" aria-hidden="true"><use href="#i-back"/></svg>Réunions</a>
+    <div id="vue"></div>
+  </main>
+</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- outils
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+// Nœud DOM ; jamais d'HTML injecté : les textes viennent des réunions et restent du texte.
+function el(tag, props = {}, ...enfants) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k.startsWith("aria-") || k.startsWith("data-") || k === "role" || k === "for" || k === "list") n.setAttribute(k, v === true ? "true" : v);
+    else if (k === "style" && typeof v === "string") n.style.cssText = v;
+    else n[k] = v;
+  }
+  n.append(...enfants.flat().filter((x) => x !== null && x !== undefined && x !== false));
+  return n;
+}
+const ico = (nom, classe = "ico") => {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("class", classe);
+  s.setAttribute("aria-hidden", "true");
+  const u = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  u.setAttribute("href", `#i-${nom}`);
+  s.append(u);
+  return s;
+};
+const bouton = (texte, action, classe = "btn petit", props = {}) =>
+  el("button", { className: classe, type: "button", onclick: action, ...props }, texte);
+const annoncer = (texte) => { $("#annonce").textContent = ""; setTimeout(() => ($("#annonce").textContent = texte), 50); };
+const memoire = {  // préférences d'affichage de ce navigateur seulement
+  lire(k, d) { try { const v = localStorage.getItem(`reunion.${k}`); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  ecrire(k, v) { try { localStorage.setItem(`reunion.${k}`, JSON.stringify(v)); } catch { /* navigation privée */ } },
+};
+
+// Heures et durées (spec, section 2) : « 14:30 », « 1 h 05 min », « 12 min », « 40 s ».
+const pad = (n) => String(n).padStart(2, "0");
+const heure = (s) => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600);
+  return h ? `${h}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}` : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+const lireHeure = (t) => { const p = String(t).trim().split(":").map(Number);
+  if (p.some(isNaN) || p.length < 2 || p.length > 3) return null; return p.reduce((a, x) => a * 60 + x, 0); };
+function duree(s) {
+  s = Math.round(s || 0);
+  if (s < 60) return `${s} s`;
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return h ? (m ? `${h} h ${pad(m)} min` : `${h} h`) : `${m} min`;
+}
+// Estimation : à la minute au-dessus sous 10 min, aux 5 min au-dessus au-delà (spec 3.2).
+const estimation = (s) => { const m = Math.max(1, Math.ceil((s || 0) / 60)); return duree((m < 10 ? m : Math.ceil(m / 5) * 5) * 60); };
+const hhmm = (epoch) => { const d = new Date(epoch * 1000); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+const JOURS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+const dateDe = (iso) => (iso ? new Date(iso) : null);
+const memeJour = (a, b) => a.toDateString() === b.toDateString();
+function jour(iso) {
+  const d = dateDe(iso);
+  if (!d) return "Autres";
+  const auj = new Date(), hier = new Date(Date.now() - 864e5);
+  if (memeJour(d, auj)) return "Aujourd'hui";
+  if (memeJour(d, hier)) return "Hier";
+  return `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}` + (d.getFullYear() !== auj.getFullYear() ? ` ${d.getFullYear()}` : "");
+}
+const jourCourt = (iso) => { const d = dateDe(iso); return d ? `${JOURS[d.getDay()].slice(0, 3)}. ${d.getDate()} ${MOIS[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}` : ""; };
+const heureDebut = (iso) => { const d = dateDe(iso); return d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : ""; };
+const pluriel = (n, mot, motP = `${mot}s`) => `${n} ${n > 1 ? motP : mot}`;
+// Jauge : un mot et une largeur, jamais de dB à l'écran.
+const motNiveau = (db) => db == null || db < -60 ? "Rien" : db < -40 ? "Faible" : db < -12 ? "Bon" : "Fort";
+const largeur = (db) => `${db == null ? 0 : Math.max(0, Math.min(100, (db + 60) / 60 * 100))}%`;
+
+// ---------------------------------------------------------------- serveur
+let horsLigne = false;
+async function api(chemin, corps) {
+  try {
+    const r = await fetch(chemin, corps === undefined ? {} : {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corps) });
+    if (r.status === 401) {  // page ouverte sans le jeton de session (S2)
+      $("#hors-ligne p").textContent = "Ouvrez Réunion depuis son icône (barre des menus ou zone de notification).";
+      $("#hors-ligne").hidden = false;
+      return await r.json();
+    }
+    const t = r.headers.get("Content-Type") || "";
+    if (t.startsWith("application/json")) return await r.json();
+    if (!r.ok) return { erreur: { code: "inconnue", cause: "Une erreur inattendue s'est produite.", garde: "" } };
+    return { fichier: await r.blob(), nom: decodeURIComponent((r.headers.get("Content-Disposition") || "").split("''")[1] || "export") };
+  } catch {
+    passerHorsLigne(true);
+    return { erreur: { code: "hors_ligne", cause: "Réunion ne répond plus.", garde: "" } };
+  }
+}
+function passerHorsLigne(oui) {
+  if (horsLigne === oui) return;
+  horsLigne = oui;
+  $("#hors-ligne").hidden = !oui;
+}
+
+// ---------------------------------------------------------------- petits composants
+function temoin() {  // « Enregistré » 2 s à côté d'un champ, ou l'erreur sur place (RG-04, ER-16)
+  const t = el("span", { className: "temoin", role: "status" });
+  t.montrer = (r) => {
+    t.className = r?.erreur ? "ko-t" : "temoin";
+    t.textContent = r?.erreur ? r.erreur.cause : "Enregistré";
+    clearTimeout(t.minuterie);
+    if (!r?.erreur) t.minuterie = setTimeout(() => (t.textContent = ""), 2000);
+  };
+  return t;
+}
+async function copier(b, texte, apres = "Copié") {
+  const avant = b.textContent;
+  try { await navigator.clipboard.writeText(texte); b.textContent = apres; }
+  catch { b.textContent = "Copie refusée par le navigateur"; }
+  setTimeout(() => (b.textContent = avant), 2000);
+}
+function toast(texte, annuler) {
+  $(".toast")?.remove();
+  const t = el("div", { className: "toast", role: "status" }, el("span", {}, texte));
+  if (annuler) t.append(bouton("Annuler", async () => { t.remove(); await annuler(); }, "btn lien"));
+  document.body.append(t);
+  setTimeout(() => t.remove(), annuler ? 10000 : 3000);
+}
+// Fenêtre de confirmation : focus piégé (dialog modal), Échap ferme, focus rendu au bouton d'origine (AX-07).
+function dialogue({ titre, contenu = [], boutons }) {
+  const origine = document.activeElement;
+  return new Promise((resoudre) => {
+    const d = el("dialog", { "aria-labelledby": "dlg-t" }, el("h3", { id: "dlg-t" }, titre), ...contenu,
+      el("div", { className: "actions" }, ...boutons.map((b) => el("button", {
+        className: `btn ${b.classe || ""}`, type: "button", autofocus: !!b.focus, onclick: () => { d.valeur = b.valeur; d.close(); } }, b.texte))));
+    d.addEventListener("close", () => { d.remove(); origine?.focus?.(); resoudre(d.valeur); });
+    document.body.append(d);
+    d.showModal();
+  });
+}
+function blocJournal(chemin, reunion) {
+  const copie = bouton("Copier le journal", async (ev) => {
+    const r = await api(`/api/journal${reunion ? `?reunion=${encodeURIComponent(reunion)}` : ""}`);
+    copier(ev.currentTarget, r.texte || "");
+  });
+  return el("div", { className: "journal" },
+    el("p", { style: "margin:0 0 6px" }, "Journal : ", el("code", {}, chemin)),
+    el("div", { className: "actions" },
+      bouton("Ouvrir le dossier", () => api("/api/ouvrir", reunion ? { reunion, journal: true } : { cible: "journal_outil" })),
+      copie),
+    el("p", { className: "note-aide", style: "margin-top:6px" }, "Collez-le dans un message à la personne qui vous aide."));
+}
+function blocErreur(e, actions = [], reunion = null, extra = []) {
+  return el("div", { className: "erreur-bloc", role: "alert" },
+    el("h3", {}, ico("alert"), e.cause), e.garde ? el("p", {}, e.garde) : null, ...extra,
+    actions.length ? el("div", { className: "actions" }, ...actions) : null,
+    e.journal ? blocJournal(e.journal, reunion) : null);
+}
+function bandeau(niveau, contenu, actions = []) {
+  const role = niveau === "rouge" ? "alert" : "status";
+  return el("div", { className: `bandeau ${niveau === "neutre" ? "" : niveau}`, role },
+    ico(niveau === "neutre" ? "info" : "alert"),
+    el("div", {}, el("p", {}, ...[].concat(contenu)), actions.length ? el("div", { className: "actions" }, ...actions) : null));
+}
+const ouvrirReglagesSysteme = (quoi) => api("/api/reglages", { quoi });
+
+function depotManuel(c) {
+  const sep = c?.separation;
+  if (!sep?.a_deposer?.length) return null;
+  return el("div", { className: "note-aide", style: "margin-top:8px" },
+    el("p", {}, "Si le réseau de cet endroit bloque le téléchargement, téléchargez ces fichiers depuis une autre connexion et déposez-les dans ce dossier, puis relancez Réunion :"),
+    el("p", {}, el("code", { className: "chemin" }, sep.dossier)),
+    el("ul", { style: "margin:4px 0 0;padding-left:20px" }, ...sep.a_deposer.map((u) => el("li", {}, el("code", { className: "chemin" }, u)))));
+}
+
+// ---------------------------------------------------------------- état global
+let etat = null, reunions = [], config = null, vue = null;
+const estMac = () => (etat?.plateforme || config?.plateforme) === "darwin";
+let debutLocal = 0;  // horloge de la page pour le chronomètre
+const depuis = () => (performance.now() - debutLocal) / 1000;
+
+async function chargerConfig() { const c = await api("/api/configuration"); if (!c.erreur) config = c; return config; }
+
+async function rafraichir() {
+  const [e, r] = await Promise.all([api("/api/etat"), api("/api/reunions")]);
+  if (e.erreur || r.erreur) return;
+  passerHorsLigne(false);
+  const avant = etat;
+  if (e.enregistrement && (!avant?.enregistrement || avant.enregistrement.nom !== e.enregistrement.nom))
+    debutLocal = performance.now() - e.enregistrement.depuis * 1000;
+  [etat, reunions] = [e, r];
+  if (!avant || avant.accueil_fini !== e.accueil_fini) return router();
+  // Enregistrement démarré ailleurs (barre des menus) ou fenêtre rouverte : écran Enregistrement (EN-13).
+  if (e.enregistrement && !avant.enregistrement && !location.hash.startsWith("#enreg")) location.hash = "#enreg";
+  dessinerCote();
+  vue?.maj?.();
+}
+function boucle() {
+  rafraichir().finally(() => setTimeout(boucle, horsLigne ? 5000 : 2000));  // ER-15 : nouvel essai toutes les 5 s
+}
+
+// ---------------------------------------------------------------- colonne
+let rechercheGlobale = { q: "", resultats: null };
+function etatListe(r) {
+  const t = etat?.travaux?.[r.nom];
+  if (r.etat === "enregistrement") return el("span", { className: "etat rec" }, `En cours - ${duree(etat?.enregistrement?.depuis || r.duree || 0)}`);
+  if (r.etat === "transcription") return el("span", { className: "etat cours" }, `Transcription... ${Math.round((t?.fraction || 0) * 100)} %`);
+  if (r.etat === "transcrite") return el("span", { className: "etat pret" }, "Prête");
+  if (r.etat === "echec") return el("span", { className: "etat echec" }, "Échec");
+  return el("span", { className: "etat" }, "Enregistrée");
+}
+const routeDe = (r) => (r.etat === "enregistrement" ? "#enreg" : `#reunion/${encodeURIComponent(r.nom)}`);
+function dessinerCote() {
+  const enr = etat?.enregistrement;
+  const b = $("#bouton-enreg");
+  b.className = "btn rec btn-enreg";
+  b.replaceChildren(el("span", { className: `pastille-rec${enr ? " carre" : ""}`, "aria-hidden": "true" }), el("span", {}, enr ? "Arrêter" : "Enregistrer"));
+  // AC-06 : préparation en cours, dans la colonne.
+  const p = etat?.preparation, prets = etat?.fichiers_prets;
+  $("#bandeau-cote").replaceChildren(...(!prets && p?.en_cours ? [bandeau("neutre", [
+    `Préparation en cours : ${p.fait_mo} Mo sur ${p.total_mo} Mo. Vous pouvez enregistrer, la transcription attendra.`,
+    el("progress", { max: p.total_mo, value: p.fait_mo, "aria-label": "Préparation", style: "margin-top:6px" })])] : []));
+  const nav = $("#liste-nav");
+  const courant = decodeURIComponent((location.hash.match(/^#reunion\/(.+)$/) || [])[1] || "");
+  if (rechercheGlobale.q && rechercheGlobale.resultats) {
+    const res = rechercheGlobale.resultats;
+    nav.replaceChildren(el("p", { className: "compteur", style: "padding:0 8px", role: "status" },
+      res.length ? `${pluriel(res.length, "réunion contient", "réunions contiennent")} « ${rechercheGlobale.q} »` : `Aucune réunion ne contient « ${rechercheGlobale.q} ».`),
+      el("ul", { className: "liste" }, ...res.map((r) => el("li", {}, el("a", { href: `#reunion/${encodeURIComponent(r.nom)}?q=${encodeURIComponent(rechercheGlobale.q)}` },
+        el("span", { className: "t" }, r.titre),
+        el("span", { className: "m" }, `${jourCourt(r.debut)} - `, el("b", {}, pluriel(r.passages, "passage")),
+          r.notes ? `, dont ${pluriel(r.notes, "note")}` : ""))))));
+    return;
+  }
+  if (!reunions.length) return nav.replaceChildren(el("p", { className: "note-aide", style: "padding:0 8px" }, "Aucune réunion pour l'instant."));
+  const groupes = new Map();
+  for (const r of reunions) {
+    const j = jour(r.debut);
+    if (!groupes.has(j)) groupes.set(j, []);
+    groupes.get(j).push(r);
+  }
+  nav.replaceChildren(...[...groupes].flatMap(([j, rs]) => [el("div", { className: "jour" }, j),
+    el("ul", { className: "liste" }, ...rs.map((r) => el("li", {}, el("a", { href: routeDe(r), "aria-current": r.nom === courant || (r.etat === "enregistrement" && location.hash === "#enreg") ? "true" : "false" },
+      el("span", { className: "t" }, r.titre),
+      el("span", { className: "m" }, [heureDebut(r.debut), r.duree != null && r.etat !== "enregistrement" ? duree(r.duree) : null,
+        r.voix ? pluriel(r.voix, "voix", "voix") : null].filter(Boolean).join(" - "), etatListe(r))))))]));
+}
+let minuterieRecherche;
+$("#cherche-g").addEventListener("input", (ev) => {
+  clearTimeout(minuterieRecherche);
+  const q = ev.target.value.trim();
+  minuterieRecherche = setTimeout(async () => {  // AC-11 : sous 300 ms après la frappe
+    rechercheGlobale = { q, resultats: q ? await api(`/api/recherche?q=${encodeURIComponent(q)}`) : null };
+    if (rechercheGlobale.resultats?.erreur) rechercheGlobale.resultats = [];
+    dessinerCote();
+  }, 250);
+});
+$("#ce-qui-sort").addEventListener("click", () => dialogue({ titre: "Ce qui sort de cet ordinateur", contenu: [el("p", {},
+  "Rien de vos réunions ne quitte cet ordinateur. Trois choses passent par internet : le téléchargement des fichiers de transcription, une seule fois ; votre agenda Google, lu sans rien envoyer, si vous l'avez branché ; la recherche de mise à jour, quand vous la demandez.")],
+  boutons: [{ texte: "Compris", classe: "principal-btn", focus: true }] }));
+$("#bouton-enreg").addEventListener("click", () => (etat?.enregistrement ? arreter() : demarrer()));
+
+// ---------------------------------------------------------------- démarrer et arrêter
+let erreurDemarrage = null;
+const brouillons = {};
+function champsNom() {  // « Donner un nom (facultatif) » : le dernier déplié sert (AC-14, VX-25)
+  const ouverts = $$("details.donner").filter((d) => d.open);
+  const d = ouverts.at(-1);
+  return d ? { nom: $("input[name=nom]", d).value, participants: $("input[name=participants]", d).value } : {};
+}
+async function demarrer() {
+  const b = $("#bouton-enreg");
+  b.disabled = true;
+  const r = await api("/api/demarrer", champsNom());
+  b.disabled = false;
+  if (r.erreur) {
+    erreurDemarrage = r.erreur;
+    if (location.hash !== "" && location.hash !== "#") location.hash = "#"; else router();
+    return;
+  }
+  erreurDemarrage = null;
+  await rafraichir();
+  location.hash = "#enreg";
+}
+async function arreter() {
+  const champ = $("#note");  // NT-06 : texte en cours rangé comme note, rien n'est perdu
+  if (champ && champ.value.trim() && vue?.noteEnCours) await vue.noteEnCours();
+  // DI-10 : le brouillon reste visible, grisé, jusqu'à la transcription complète (en mémoire de la page seulement).
+  const enr = etat?.enregistrement;
+  if (enr?.direct?.morceaux?.length) brouillons[enr.nom] = enr.direct.morceaux;
+  const r = await api("/api/arreter", {});
+  if (r.nom && enr && r.nom !== enr.nom && brouillons[enr.nom]) brouillons[r.nom] = brouillons[enr.nom];
+  await rafraichir();
+  if (r.nom) location.hash = `#reunion/${encodeURIComponent(r.nom)}`;
+}
+
+// ---------------------------------------------------------------- accueil
+function heroEnregistrer(n) {
+  const now = new Date();
+  return el("div", { className: "hero carte" },
+    el("button", { className: "btn rec btn-enreg", type: "button", onclick: demarrer }, el("span", { className: "pastille-rec", "aria-hidden": "true" }), el("span", {}, "Enregistrer")),
+    el("details", { className: "donner" }, el("summary", {}, "Donner un nom (facultatif)"),
+      el("label", { for: `h-nom${n}` }, "Nom de la réunion"),
+      el("input", { id: `h-nom${n}`, name: "nom", type: "text", autocomplete: "off",
+        placeholder: `Réunion du ${now.getDate()} ${MOIS[now.getMonth()]} ${pad(now.getHours())}:${pad(now.getMinutes())}` }),
+      el("label", { for: `h-part${n}` }, "Participants"),
+      el("input", { id: `h-part${n}`, name: "participants", type: "text", autocomplete: "off", "aria-describedby": `h-aide${n}` }),
+      el("p", { className: "note-aide", id: `h-aide${n}` }, "Prénoms séparés par des virgules. Ils servent à proposer des noms pour les voix.")),
+    el("p", { className: "note-aide" }, "Prévenez les participants que vous enregistrez."));
+}
+function erreurDeDemarrage(e) {
+  const c = e.code, actions = [];
+  const reessayer = bouton("Réessayer", () => { erreurDemarrage = null; demarrer(); });
+  if (c === "micro_refuse") actions.push(bouton("Ouvrir les réglages du micro", () => ouvrirReglagesSysteme("micro")), reessayer);
+  else if (c === "son_refuse") actions.push(bouton("Ouvrir les réglages", () => ouvrirReglagesSysteme("ecran")), reessayer);
+  else if (c === "place") actions.push(bouton("Ouvrir le dossier des réunions", () => api("/api/ouvrir", { cible: "reunions" })), reessayer);
+  else if (c === "dossier") actions.push(bouton("Choisir un autre dossier", () => (location.hash = "#reglages")));
+  else if (c === "installation") actions.push(bouton("Ouvrir la page de téléchargement", () => window.open(config?.page_telechargement, "_blank", "noopener")));
+  else actions.push(reessayer);
+  // MD-06 : après une mise à jour, macOS peut refuser l'accès tant que l'ancienne entrée reste dans la liste.
+  const extra = estMac() && ["micro_refuse", "son_refuse"].includes(c) ? [el("p", {},
+    "Après une mise à jour, retirez Réunion de la liste dans les réglages du Mac (bouton -), puis réessayez.")] : [];
+  return blocErreur(e, actions, null, extra);
+}
+const TEXTES_MANQUE = {
+  micro: "autoriser le micro.", dossier: "choisir un dossier des réunions accessible.",
+  place: "libérer de la place sur le disque.", installation: "réinstaller Réunion, une partie de l'installation manque.",
+};
+function actionManque(m) {
+  if (m.action === "reglages_micro") return bouton("Autoriser", async () => { await ouvrirReglagesSysteme("micro"); await api("/api/configuration", { etat_micro: "" }); });
+  if (m.action === "choisir_dossier") return bouton("Choisir un autre dossier", () => (location.hash = "#reglages"));
+  if (m.action === "ouvrir_dossier") return bouton("Ouvrir le dossier des réunions", () => api("/api/ouvrir", { cible: "reunions" }));
+  return bouton("Ouvrir la page de téléchargement", () => window.open(config?.page_telechargement, "_blank", "noopener"));
+}
+function vueAccueil() {
+  const racine = el("div", { className: "colonne" });
+  const dessiner = () => {
+    const parts = [];
+    if (erreurDemarrage) parts.push(erreurDeDemarrage(erreurDemarrage));
+    for (const m of (etat?.manque || []).filter((m) => m.niveau === "bloquant"))  // AC-05
+      parts.push(el("div", { style: "margin-bottom:12px" }, bandeau("rouge", [el("b", {}, "Il manque une étape pour enregistrer : "),
+        m.code === "place" ? `libérer de la place sur le disque (${m.libre} libres).` : TEXTES_MANQUE[m.code] || ""], [actionManque(m)])));
+    if (!reunions.length) {
+      parts.push(el("div", { className: "vide" }, el("h2", {}, "Pas encore de réunion"),
+        el("p", {}, "Cliquez sur Enregistrer quand la réunion commence. Vous la retrouverez ici, transcrite."),
+        el("ul", { className: "conseils" },
+          el("li", {}, ico("headset"), "Mettez un casque en visio : votre micro n'entendra que vous."),
+          el("li", {}, ico("bell"), "Coupez musique et notifications : tout le son de l'ordinateur est enregistré."),
+          el("li", {}, ico("mic"), "Prévenez les participants que vous enregistrez."))));
+    } else {
+      parts.push(heroEnregistrer(0));
+      // Résumé de la semaine, du lundi au dimanche (AC-02).
+      const lundi = new Date(); lundi.setHours(0, 0, 0, 0); lundi.setDate(lundi.getDate() - (lundi.getDay() + 6) % 7);
+      const semaine = reunions.filter((r) => r.debut && new Date(r.debut) >= lundi);
+      if (semaine.length) parts.push(el("p", { className: "resume" },
+        `${pluriel(semaine.length, "réunion")} cette semaine, ${duree(semaine.reduce((a, r) => a + (r.duree || 0), 0))} au total.`));
+      const prete = reunions.find((r) => r.etat === "transcrite");
+      if (prete) parts.push(el("div", { className: "carte", style: "margin-top:12px" },
+        el("h3", {}, prete.prete_a ? `Prête depuis ${memeJour(new Date(prete.prete_a * 1000), new Date()) ? hhmm(prete.prete_a) : jour(new Date(prete.prete_a * 1000).toISOString()).toLowerCase()}` : "Dernière réunion prête"),
+        el("p", { style: "margin-top:6px" }, el("a", { href: routeDe(prete), style: "color:var(--accent-fort);font-weight:600" }, prete.titre),
+          ` - ${duree(prete.duree)} - ${pluriel(prete.voix, "voix", "voix")}` + (prete.propositions ? `, dont ${pluriel(prete.propositions, "proposition")} à vérifier` : ""))));
+    }
+    const conseil = (etat?.manque || []).find((m) => m.niveau === "conseille");  // AC-07, masquable
+    if (conseil && !memoire.lire("plus-tard-son", false)) {
+      parts.push(el("div", { className: "conseille", role: "status" }, el("span", { className: "etiq" }, "Conseillé"),
+        el("p", {}, "Le son de l'ordinateur n'est pas autorisé : les personnes en visio ne seront pas enregistrées."),
+        bouton("Autoriser", async () => { await ouvrirReglagesSysteme(estMac() ? "ecran" : "son"); await api("/api/configuration", { etat_son: "" }); }, "btn lien"),
+        bouton("Plus tard", () => { memoire.ecrire("plus-tard-son", true); dessiner(); }, "btn lien")));
+    }
+    // MD-05 : une fois après une mise à jour, sur Mac.
+    if (estMac() && config && memoire.lire("version-vue", null) && memoire.lire("version-vue", null) !== config.version)
+      parts.unshift(el("div", { style: "margin-bottom:12px" }, bandeau("neutre",
+        "Réunion a été mise à jour. macOS peut redemander l'accès au micro et au son de l'ordinateur : acceptez.",
+        [bouton("Compris", () => { memoire.ecrire("version-vue", config.version); dessiner(); })])));
+    if (config && !memoire.lire("version-vue", null)) memoire.ecrire("version-vue", config.version);
+    const ouverts = $$("details.donner", racine).map((d) => [d.open, $("input[name=nom]", d)?.value, $("input[name=participants]", d)?.value]);
+    racine.replaceChildren(...parts);
+    $$("details.donner", racine).forEach((d, i) => { if (ouverts[i]) { d.open = ouverts[i][0]; $("input[name=nom]", d).value = ouverts[i][1] || ""; $("input[name=participants]", d).value = ouverts[i][2] || ""; } });
+  };
+  dessiner();
+  let signature = "";
+  return { noeud: racine, maj() {
+    const s = JSON.stringify([reunions.map((r) => [r.nom, r.etat, r.voix]), etat.manque, !!erreurDemarrage]);
+    if (s !== signature && !racine.contains(document.activeElement)) { signature = s; dessiner(); }
+  } };
+}
+
+// ---------------------------------------------------------------- enregistrement (EN, DI, NT)
+const TEXTES_ALERTE = {
+  fige: () => "L'enregistrement est bloqué depuis 30 s. Ce qui a été enregistré jusqu'ici est gardé.",
+  arret: (a) => `L'enregistrement s'est arrêté à ${a.heure} : l'enregistreur a cessé de répondre. Les ${a.minutes} min enregistrées sont gardées.`,
+  micro_muet: () => "Votre micro ne capte rien depuis 30 s. Vérifiez qu'il n'est pas coupé dans la visio ou sur l'ordinateur.",
+  son_coupe: () => "Le son de la visio n'arrive plus depuis 1 min. Vérifiez la sortie audio de l'ordinateur (casque, haut-parleurs).",
+  place: (a) => `Il reste de la place pour environ ${a.minutes} min d'enregistrement.`,
+  son_jamais: () => "Aucun son de l'ordinateur depuis 1 min. En visio, vérifiez que vous entendez les autres sur cet ordinateur. Réunion dans une pièce : rien à faire, les voix seront séparées sur votre micro.",
+  appareil: () => "Changement d'appareil audio : l'enregistrement a suivi.",
+};
+const RANG = { rouge: 0, jaune: 1, neutre: 2 };
+function vueEnregistrement() {
+  const enr = etat?.enregistrement;
+  if (!enr) { location.hash = "#"; return { noeud: el("div") }; }
+  const masques = new Set();
+  let instantNote = null, verifMicro = false, suivreDirect = true, replie = memoire.lire("direct-replie", false), nbMorceaux = -1;
+  const chrono = el("b", {}, heure(depuis()));
+  const chronoBloc = el("div", { className: "chrono", role: "timer", "aria-label": "Durée de l'enregistrement" }, el("span", { className: "point", "aria-hidden": "true" }), chrono);
+  const jauge = (nom) => { const i = el("i", { style: "width:0" }), b = el("b", {}, "Rien");
+    return { noeud: el("div", { className: "jauge" }, el("span", {}, nom), el("span", { className: "barre", "aria-hidden": "true" }, i), b), i, b, nom }; };
+  const jMicro = jauge("Votre micro"), jSon = jauge("Son de l'ordinateur");
+  const etatMicro = el("p", { className: "note-aide", role: "status" });
+  const pile = el("div", { className: "empile" });
+  const vosNotes = el("ul", { className: "vos-notes" });
+  const notes = [];
+  const champ = el("input", { id: "note", type: "text", placeholder: "Ex. : à rappeler pour le devis", autocomplete: "off", "aria-describedby": "note-aide" });
+  const verif = el("p", { className: "verif", "aria-live": "polite" });
+  const verifier = bouton("Vérifier la transcription", async () => {  // EN-09
+    verifier.disabled = true;
+    verif.textContent = "Transcription des 20 dernières secondes...";
+    const r = await api("/api/apercu", {});
+    verifier.disabled = false;
+    verif.textContent = r.erreur ? r.erreur.cause : `« ...${r.texte} »`;
+  }, "btn lien");
+  // Note : instant de la première frappe (NT-02), oublié si le champ est vidé (NT-04).
+  champ.addEventListener("input", () => {
+    if (!champ.value.trim()) instantNote = null;
+    else if (instantNote === null) instantNote = Math.max(0, depuis());
+  });
+  const ajouterNote = async () => {
+    const texte = champ.value.trim();
+    if (!texte) { champ.value = ""; instantNote = null; return; }  // NT-03
+    const t = instantNote ?? depuis();
+    champ.value = ""; instantNote = null;
+    const r = await api("/api/note", { reunion: enr.nom, action: "ajouter", t_s: Math.round(t * 10) / 10, texte });
+    if (r.erreur) { champ.value = texte; return toast(r.erreur.cause); }
+    notes.push(r.note);
+    dessinerNotes();
+  };
+  champ.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); ajouterNote(); } });
+  const dessinerNotes = () => {
+    vosNotes.replaceChildren(...notes.map((n) => el("li", {}, el("time", {}, heure(n.t_s)), n.texte)));
+    nbMorceaux = -1;
+    maj();  // NT-05 : la note s'insère aussitôt dans le direct
+  };
+  // Panneau direct (DI).
+  const retard = el("span", { className: "retard", role: "status", hidden: true });
+  const morceaux = el("ul", { className: "morceaux", "aria-live": "off" });
+  const mention = el("p", { className: "mention" }, "Brouillon - remplacé à l'arrêt.");
+  const saut = el("p", { className: "mention", role: "status", hidden: true }, "Le direct a trop de retard : il reprend à partir de maintenant.");
+  const revenir = bouton("Revenir au direct", () => { suivreDirect = true; morceaux.scrollTop = morceaux.scrollHeight; revenir.hidden = true; }, "btn petit revenir", { hidden: true });
+  const replier = bouton(replie ? "Déplier" : "Replier", () => {
+    replie = !replie; memoire.ecrire("direct-replie", replie);
+    replier.textContent = replie ? "Déplier" : "Replier";
+    titreDirect.textContent = replie ? "En direct - brouillon (replié)" : "En direct - brouillon";
+    panneau.classList.toggle("replie", replie);
+    for (const n of [mention, morceaux]) n.hidden = replie;
+    if (!replie) morceaux.scrollTop = morceaux.scrollHeight;
+  });
+  const titreDirect = el("h3", { id: "titre-direct" }, replie ? "En direct - brouillon (replié)" : "En direct - brouillon");
+  const panneau = el("section", { className: `direct${replie ? " replie" : ""}`, "aria-labelledby": "titre-direct" },
+    el("header", {}, titreDirect, retard, replier), mention, saut, morceaux, revenir);
+  mention.hidden = morceaux.hidden = replie;
+  morceaux.addEventListener("scroll", () => {  // DI-03 : remonter à la main arrête le suivi
+    const enBas = morceaux.scrollHeight - morceaux.scrollTop - morceaux.clientHeight < 24;
+    suivreDirect = enBas; revenir.hidden = enBas || replie;
+  });
+  const sansDirect = el("div", { className: "note-aide" });
+  const titre = el("p", { style: "color:var(--ink);font-weight:600" }, enr.titre);
+  const noeud = el("div", { className: "enreg" },
+    el("div", {}, el("div", { className: "carte" }, chronoBloc, titre,
+      el("div", { className: "jauges" }, jMicro.noeud, jSon.noeud), etatMicro, pile,
+      el("div", { className: "champ-note" }, el("label", { for: "note" }, "Ajouter une note"), champ,
+        el("p", { className: "note-aide", id: "note-aide", style: "margin-top:4px" }, "Entrée pour ajouter la note."),
+        el("h4", { style: "margin-top:14px;font-size:15px" }, "Vos notes"), vosNotes),
+      el("div", { className: "actions", style: "margin-top:20px" },
+        el("button", { className: "btn rec", type: "button", style: "min-width:160px", onclick: arreter },
+          el("span", { className: "pastille-rec carre", "aria-hidden": "true" }), "Arrêter"), verifier),
+      verif,
+      el("p", { className: "note-aide", style: "margin-top:10px" }, "Prévenez les participants que vous enregistrez."))),
+    el("div", {}, panneau, sansDirect));
+  const tic = setInterval(() => { chrono.textContent = heure(depuis()); chronoBloc.setAttribute("aria-label", `Durée de l'enregistrement ${heure(depuis())}`); }, 250);
+
+  function maj() {
+    const e = etat?.enregistrement;
+    if (!e) return;
+    titre.textContent = e.titre;
+    for (const [j, db] of [[jMicro, e.niveau_micro], [jSon, e.niveau_systeme]]) {
+      j.i.style.width = largeur(db); j.b.textContent = motNiveau(db);
+      j.noeud.setAttribute("aria-label", `${j.nom} : ${motNiveau(db)}`);  // AX-08
+    }
+    if (e.niveau_micro != null && e.niveau_micro > -60) verifMicro = true;
+    etatMicro.textContent = e.depuis < 3 ? "Vérification du micro et du son..." : verifMicro ? "Votre micro fonctionne." : "";  // EN-02
+    // Bandeaux : 3 au plus, le plus grave en haut (EN-12).
+    const alertes = (e.alertes || []).filter((a) => !masques.has(a.code)).sort((a, b) => RANG[a.niveau] - RANG[b.niveau]).slice(0, 3);
+    const sig = JSON.stringify(alertes.map((a) => [a.code, a.minutes]));
+    if (pile.dataset.sig !== sig) {
+      pile.dataset.sig = sig;
+      pile.replaceChildren(...alertes.map((a) => {
+        const actions = [];
+        if (a.code === "fige") actions.push(bouton("Relancer l'enregistrement", relancer));
+        if (a.code === "arret") actions.push(bouton("Transcrire ce qui est gardé", arreter), bouton("Enregistrer de nouveau", relancer));
+        if (a.code === "micro_muet") actions.push(bouton("Ouvrir les réglages du son", () => ouvrirReglagesSysteme("son")));
+        if (a.code === "place") actions.push(bouton("Ouvrir le dossier des réunions", () => api("/api/ouvrir", { cible: "reunions" })));
+        if (a.code === "son_jamais") actions.push(bouton("Masquer", () => { masques.add(a.code); pile.dataset.sig = ""; maj(); }));
+        return bandeau(a.niveau, TEXTES_ALERTE[a.code](a), actions);
+      }));
+    }
+    // Direct.
+    const d = e.direct || {};
+    panneau.hidden = !d.actif;
+    sansDirect.hidden = !!d.actif;
+    if (!d.actif) {
+      sansDirect.replaceChildren(...(d.raison === "preparation" || !etat.fichiers_prets
+        ? [el("p", {}, "Le direct sera disponible à la fin de la préparation.")]  // DI-11
+        : [el("p", {}, "Direct coupé sur cet ordinateur : il ralentirait la visio et transcrirait mal. ",  // DI-08
+            bouton("L'activer quand même", () => api("/api/direct", {}), "btn lien"))]));
+      return;
+    }
+    retard.hidden = !(d.retard_s > 15);  // DI-04
+    retard.textContent = `En retard de ${duree(d.retard_s)}`;
+    saut.hidden = !d.saut;  // DI-05
+    const elements = [...(d.morceaux || []).map((m) => ({ t: m.t_s, qui: m.source === "moi" ? "Moi" : "Les autres", texte: m.texte })),
+      ...notes.map((n) => ({ t: n.t_s, qui: "Note", texte: n.texte, note: true }))].sort((a, b) => a.t - b.t);
+    if (elements.length !== nbMorceaux) {
+      nbMorceaux = elements.length;
+      morceaux.replaceChildren(...elements.map((m) => el("li", { className: m.note ? "n" : "" },
+        el("time", {}, heure(m.t)), el("span", { className: "qui" }, m.qui), el("p", {}, m.texte))));
+      if (suivreDirect) morceaux.scrollTop = morceaux.scrollHeight;
+    }
+  }
+  async function relancer() { const r = await api("/api/relancer", {}); if (r.erreur) toast(r.erreur.cause); await rafraichir(); }
+  maj();
+  return { noeud, maj, quitter() { clearInterval(tic); }, noteEnCours: ajouterNote };
+}
+
+// ---------------------------------------------------------------- réunion ouverte
+const ETAPES = ["Préparation du son", "Transcription", "Séparation des voix", "Reconnaissance des voix connues"];
+const positions = {};  // LI-22 : position de lecture et de défilement par réunion
+let lecteurActif = null;
+
+function couleur(numero) { return `var(--loc-${(numero - 1) % 5 + 1})`; }
+
+function vueReunion(nom, q) {
+  const racine = el("div", { className: "colonne" });
+  let data = null, travailAvant = null, signature = "";
+  async function charger(garder = true) {
+    const pos = garder && lecteurActif ? { t: lecteurActif.audio.currentTime, y: scrollY } : null;
+    const r = await api(`/api/reunion/${encodeURIComponent(nom)}`);
+    if (r.erreur) return racine.replaceChildren(blocErreur(r.erreur, [bouton("Retour aux réunions", () => (location.hash = "#"))]));
+    data = r;
+    dessiner();
+    if (pos && lecteurActif) { lecteurActif.audio.currentTime = pos.t; scrollTo(0, pos.y); }
+  }
+  function dessiner() {
+    if (lecteurActif) { lecteurActif.audio.pause(); lecteurActif = null; }
+    const t = data.transcription, travail = etat?.travaux?.[nom];
+    const nVoix = data.voix.length;
+    const meta = [jourCourt(data.debut).replace(/^(\w+)\./, (m, j) => JOURS.find((x) => x.startsWith(j)) || m), data.duree != null ? duree(data.duree) : null,
+      nVoix ? pluriel(nVoix, "voix", "voix") : null].filter(Boolean).join(" - ");
+    const titre = el("h2", {}, el("button", { type: "button", title: "Modifier le titre", onclick: () => modifierTitre(titre) }, data.titre));
+    const actions = el("div", { className: "actions" });
+    if (t && !travail?.en_cours) actions.append(menuExport(), bouton("Refaire la transcription", (ev) => refaire(ev.currentTarget), "btn", { id: "btn-refaire" }));
+    actions.append(menu("Plus", [
+      ["Ouvrir le dossier", () => api("/api/ouvrir", { reunion: nom })],
+      ["Supprimer...", supprimer, "danger"]], true));
+    const parts = [el("div", { className: "tete" }, el("div", {}, titre, el("p", { className: "meta" }, meta)), actions)];
+    if (travail?.en_cours) parts.push(...blocTranscription(travail), ...(brouillons[nom] ? [el("section", { className: "direct grise", style: "margin-top:20px", "aria-labelledby": "titre-brouillon" },
+      el("header", {}, el("h3", { id: "titre-brouillon" }, "En direct - brouillon")),
+      el("p", { className: "mention" }, "Brouillon - en cours de remplacement"),
+      el("ul", { className: "morceaux" }, ...brouillons[nom].map((m) => el("li", {}, el("time", {}, heure(m.t_s)),
+        el("span", { className: "qui" }, m.source === "moi" ? "Moi" : "Les autres"), el("p", {}, m.texte)))))] : []));
+    else if (data.echec) parts.push(blocErreur(data.echec, [bouton("Réessayer", () => transcrire({}), "btn principal-btn")], nom));
+    else if (!t && reunions.find((r) => r.nom === nom)?.etat === "attente") {
+      const p = etat?.preparation;  // TR-13
+      parts.push(el("div", { style: "margin-top:20px" }, bandeau("neutre", `Enregistrée. La transcription commencera à la fin de la préparation${p ? ` (${p.fait_mo} Mo sur ${p.total_mo} Mo)` : ""}.`)));
+    } else if (!t) parts.push(el("div", { style: "margin-top:20px" }, bandeau("neutre",  // LI-14
+      `Cette réunion n'est pas encore transcrite. Durée estimée : ${estimation(data.estimation_s)}.`,
+      [bouton("Transcrire", () => transcrire({}), "btn petit principal-btn")])));
+    if (!travail?.en_cours) delete brouillons[nom];  // transcription complète : le brouillon disparaît
+    if (t && !travail?.en_cours) parts.push(...blocLecture(t));
+    else if (travail?.en_cours && data.partiel?.length)  // TR-06 : sans colonne de noms, notes à leur instant
+      parts.push(el("h3", { style: "margin-top:24px;font-size:16px" }, "Déjà transcrit"),
+        el("p", { className: "note-aide" }, "Les noms des voix arriveront à la fin de la séparation."),
+        listeLignes(data.partiel.map((b) => ({ ...b, fin: b.debut, loc: "" })), data.notes, false));
+    else if (data.notes.length) parts.push(el("h3", { style: "margin-top:24px;font-size:16px" }, "Vos notes"), listeLignes([], data.notes, false));  // NT-17
+    if (data.ecoute && (t || data.notes.length) && !travail?.en_cours) parts.push(lecteur());
+    else if (!data.ecoute && t) parts.push(el("div", { style: "margin-top:16px" }, bandeau("neutre", "Réécoute indisponible pour cette réunion.")));  // LI-15
+    racine.replaceChildren(...parts);
+    if (q) { const c = $("#cherche-r", racine); if (c) { c.value = q; c.dispatchEvent(new Event("input")); q = null; } }
+  }
+  function blocTranscription(tr) {
+    const pct = Math.round((tr.fraction || 0) * 100);
+    const reste = Math.max(0, tr.fin_estimee - Date.now() / 1000);
+    const lignes = [];
+    if (tr.reprise) lignes.push(el("p", { style: "margin-top:8px" }, "Reprise de la transcription interrompue."));  // TR-09
+    if (tr.repli) lignes.push(el("p", { className: "note-aide", style: "margin-top:8px" }, `La carte graphique a échoué : calcul sur le processeur, plus lent. Nouvelle heure de fin : ${hhmm(tr.fin_estimee)}.`));  // ER-14
+    if (tr.lent) lignes.push(el("p", { className: "note-aide", style: "margin-top:8px" }, "Plus lent que prévu : l'ordinateur est peut-être occupé par d'autres applications."));  // TR-04
+    if (tr.approx && tr.fraction < 0.1) lignes.push(el("p", { className: "note-aide", style: "margin-top:8px" }, "Estimation approximative, elle s'affinera."));  // TR-05
+    return [el("div", { className: "carte", style: "margin-top:20px" }, el("h3", {}, "Transcription en cours"),
+      el("p", { className: "fin", style: "margin-top:8px" }, `Prête vers ${hhmm(tr.fin_estimee)} `, el("span", {}, `(encore ${estimation(reste)} environ).`)),
+      el("div", { style: "display:flex;gap:10px;align-items:center;margin-top:12px" },
+        el("progress", { max: 100, value: pct, "aria-label": "Avancement de la transcription" }), el("b", { style: "font-variant-numeric:tabular-nums;white-space:nowrap" }, `${pct} %`)),
+      el("ol", { className: "etapes" }, ...ETAPES.map((nomE, i) => {
+        const etape = i + 1, cl = etape < tr.etape ? "ok" : etape === tr.etape ? "cours" : "attente";
+        return el("li", { className: cl }, cl === "ok" ? ico("check") : el("span", { className: "rondpt", "aria-hidden": "true" }), nomE,
+          el("span", { className: "sr" }, cl === "ok" ? " (fini)" : cl === "cours" ? " (en cours)" : " (à venir)"));
+      })),
+      ...lignes,
+      el("p", { className: "note-aide", style: "margin-top:8px" }, "Vous pouvez fermer cette page ou enregistrer une autre réunion."))];
+  }
+  async function transcrire(o) {
+    const r = await api("/api/transcrire", { reunion: nom, ...o });
+    if (r.erreur) return toast(r.erreur.cause);
+    await rafraichir(); await charger(false);
+  }
+  async function refaire(origine) {  // TR-10 à TR-12
+    const k = Math.round(data.estimation_s);
+    const combien = el("input", { id: "combien", type: "number", min: 1, max: 30, "aria-describedby": "combien-aide" });
+    const faibles = el("input", { type: "checkbox" });
+    const langue = el("select", { id: "langue-r" }, ...Object.entries(config?.langues || {}).map(([code, n]) =>
+      el("option", { value: code, selected: code === config?.reglages?.langue }, code === config?.langue_systeme ? `${n} (langue du système)` : n)));
+    const choix = await dialogue({ titre: "Refaire la transcription ?", contenu: [
+      el("p", {}, `Le texte actuel sera remplacé, y compris vos corrections de texte. Les noms donnés aux voix et vos notes sont gardés. Durée estimée : ${estimation(k)}.`),
+      el("label", { for: "combien" }, "Combien de personnes ont parlé ?"), combien,
+      el("p", { className: "note-aide", id: "combien-aide" }, "Laissez vide si vous ne savez pas."),
+      el("label", { className: "case" }, faibles, "Les voix étaient faibles ou lointaines"),
+      el("label", { for: "langue-r" }, "Langue parlée"), langue],
+    boutons: [{ texte: "Annuler", focus: true }, { texte: "Refaire", classe: "principal-btn", valeur: true }] });
+    if (!choix) return origine?.focus();
+    transcrire({ ...(Number(combien.value) > 0 ? { personnes: Number(combien.value) } : {}), chuchote: faibles.checked, langue: langue.value });
+  }
+  async function supprimer() {  // LI-17, LI-18
+    const ok = await dialogue({ titre: `Supprimer « ${data.titre} » ?`, contenu: [el("p", {}, "Le son, le texte et le compte rendu seront effacés de cet ordinateur. Impossible de revenir en arrière.")],
+      boutons: [{ texte: "Annuler", focus: true }, { texte: "Supprimer", classe: "rec", valeur: true }] });
+    if (!ok) return;
+    const r = await api("/api/supprimer", { reunion: nom });
+    if (r.erreur) return toast(r.erreur.cause);
+    toast("Réunion supprimée.");
+    await rafraichir();
+    location.hash = "#";
+  }
+  function modifierTitre(h2) {  // LI-13
+    const champ = el("input", { className: "titre-champ", value: data.titre, "aria-label": "Titre de la réunion, Entrée pour enregistrer, Échap pour annuler" });
+    const t = temoin();
+    let fini = false;
+    const valider = async (garder) => {
+      if (fini) return; fini = true;
+      const v = champ.value.trim();
+      if (!garder || !v || v === data.titre) { champ.replaceWith(h2); t.remove(); return h2.firstChild.focus(); }
+      const r = await api("/api/renommer-reunion", { reunion: nom, titre: v });
+      if (r.erreur) { fini = false; return t.montrer(r); }
+      await rafraichir();
+      location.hash = `#reunion/${encodeURIComponent(r.nom)}`;
+    };
+    champ.addEventListener("keydown", (e) => { if (e.key === "Enter") valider(true); if (e.key === "Escape") { e.stopPropagation(); valider(false); } });
+    champ.addEventListener("blur", () => valider(false));
+    h2.replaceWith(champ);
+    champ.after(t);
+    champ.select();
+  }
+  function menuExport() {  // LI-19
+    const exporter = async (format) => {
+      const r = await api("/api/export", { reunion: nom, format });
+      if (r.erreur) return toast(r.erreur.cause);
+      const a = el("a", { href: URL.createObjectURL(r.fichier), download: r.nom });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    };
+    return menu("Exporter", [
+      ["Copier tout le texte", async (ev) => { const r = await api("/api/export", { reunion: nom, format: "md" }); if (!r.erreur) { const b = ev.currentTarget; await copier($("summary", b.closest("details")), await r.fichier.text()); } }],
+      ["Enregistrer en Word (.docx)", () => exporter("docx")],
+      ["Enregistrer en texte (.md)", () => exporter("md")]]);
+  }
+
+  // ---- lecture
+  function blocLecture(t) {
+    const parts = [];
+    const p = data.participants || {};
+    const noms = p.noms || [];
+    const avecMoi = [...new Set([data.moi, ...noms])];
+    // VX-26 : participants, modifiables.
+    const ligneP = el("p", { className: "participants" });
+    // replaceChildren écrit « null » pour un enfant absent : on retire les vides.
+    const dessinerP = () => ligneP.replaceChildren(...["Participants : ", noms.length || data.moi ? avecMoi.map((n) => n === data.moi ? `${n} (vous)` : n).join(", ") + " " : "aucun ",
+      noms.length ? el("span", { className: "note-aide" }, p.saisis ? "- saisis " : "- agenda ") : null,
+      bouton(noms.length ? "Modifier" : "Ajouter les participants", modifierP, "btn lien")].filter(Boolean));
+    const modifierP = () => {
+      const champ = el("input", { type: "text", value: noms.join(", "), "aria-label": "Participants, prénoms séparés par des virgules" });
+      const t2 = temoin();
+      const valider = async () => {
+        const r = await api("/api/participants", { reunion: nom, noms: champ.value.split(",").map((x) => x.trim()).filter(Boolean) });
+        if (r.erreur) return t2.montrer(r);
+        await charger();
+      };
+      champ.addEventListener("keydown", (e) => { if (e.key === "Enter") valider(); if (e.key === "Escape") { e.stopPropagation(); dessinerP(); } });
+      ligneP.replaceChildren("Participants : ", champ, bouton("Enregistrer", valider), t2);
+      champ.focus();
+    };
+    dessinerP();
+    parts.push(ligneP);
+    if (noms.length) {  // VX-22, sans alerte
+      const prevus = avecMoi.length, n = data.voix.length;
+      if (n !== prevus) parts.push(el("p", { className: "note-aide" }, `${pluriel(n, "voix trouvée", "voix trouvées")} pour ${pluriel(prevus, "participant prévu", "participants prévus")}${n > prevus ? " : une personne a peut-être été coupée en deux voix." : "."}`));
+    }
+    if (data.voix.length > 8) parts.push(el("p", { className: "note-aide" }, "Au-delà de 8 voix, la séparation se trompe plus souvent. Vérifiez les noms."));  // VX-17
+    if (!t.separation) parts.push(el("div", { style: "margin-top:12px" }, bandeau("neutre", "Les voix n'ont pas été séparées : votre micro est noté « Moi » et le son de l'ordinateur « Les autres ».",  // LI-16
+      data.separation_disponible ? [bouton("Refaire la transcription", () => refaire())] : [])));
+    parts.push(bandeVoix());
+    if (data.voix.some((v) => v.proposition)) parts.push(el("p", { className: "note-aide", id: "verifiez" }, "Vérifiez les propositions en écoutant."));  // VX-18
+    const panneauT = el("div", { id: "p-trans", role: "tabpanel", "aria-labelledby": "t-trans" }, ...outilsEtLignes(t));
+    if (data.compte_rendu) {  // LI-20, LI-21
+      const panneauC = el("div", { id: "p-cr", role: "tabpanel", "aria-labelledby": "t-cr", hidden: true },
+        el("p", { className: "note-aide", style: "margin:12px 0" }, `Fichier « ${data.compte_rendu.fichier} » trouvé dans le dossier de la réunion. Lecture seule.`),
+        el("article", { className: "cr" }, data.compte_rendu.texte));
+      const onglet = (id, texte, panneau) => el("button", { role: "tab", id, type: "button", "aria-controls": panneau.id, "aria-selected": id === "t-trans" ? "true" : "false",
+        onclick: () => { for (const [b, pn] of [[ot, panneauT], [oc, panneauC]]) { b.setAttribute("aria-selected", String(pn === panneau)); pn.hidden = pn !== panneau; } } }, texte);
+      const ot = onglet("t-trans", "Transcription", panneauT), oc = onglet("t-cr", "Compte rendu", panneauC);
+      parts.push(el("div", { className: "onglets", role: "tablist", "aria-label": "Contenu de la réunion" }, ot, oc), panneauT, panneauC);
+    } else parts.push(panneauT);
+    return parts;
+  }
+  const libelle = (loc) => (data.transcription?.propositions[loc] ? `${data.transcription.propositions[loc].nom} ?` : loc);
+  const voixDe = (loc) => data.voix.find((v) => v.loc === loc);
+
+  function bandeVoix() {
+    const bande = el("div", { className: "voix", role: "list", "aria-label": "Voix" });
+    const extrait = new Audio();
+    for (const v of data.voix) {
+      const carte = el("div", { className: `voix-carte${v.proposition ? " prop" : ""}`, role: "listitem", style: `--c:${couleur(v.numero)}` });
+      const ecouter = data.ecoute && v.extrait ? bouton("Écouter", () => {  // VX-15 : sans toucher la lecture principale
+        extrait.src = `/ecoute/${encodeURIComponent(nom)}.m4a#t=${v.extrait.debut},${v.extrait.fin}`;
+        extrait.play().catch(() => {});
+      }) : null;
+      const temps = el("small", {}, `${duree(v.temps_s)} de parole`);
+      const generique = /^Voix \d+$/.test(v.loc);
+      if (v.proposition) {
+        carte.append(el("span", { className: "nom" }, el("em", {}, `C'est ${v.proposition.nom} ?`), el("small", {}, `- voix ${v.numero}`)), temps,
+          el("span", { className: "conf" }, v.proposition.niveau),
+          el("div", { className: "actions" },
+            bouton("Oui", async () => { const r = await api("/api/voix/accepter", { reunion: nom, voix: v.loc }); if (r.erreur) return toast(r.erreur.cause); toast(`${r.nom} confirmée.`); await charger(); }, "btn petit principal-btn"),
+            bouton("Non", async () => { const r = await api("/api/voix/refuser", { reunion: nom, voix: v.loc }); if (r.erreur) return toast(r.erreur.cause); await charger(); }),
+            ecouter));
+      } else {
+        // VX-07 : « Nommer », ou un clic sur le nom.
+        const nomV = generique ? el("span", { className: "nom" }, v.loc) : el("span", { className: "nom" },
+          el("button", { className: "nom-btn", type: "button", title: "Changer le nom", onclick: () => nommer(v, carte) }, v.loc),
+          el("small", {}, `${v.loc === data.moi ? "(vous) " : ""}- voix ${v.numero}`));
+        const actions = el("div", { className: "actions" },
+          generique ? bouton("Nommer", () => nommer(v, carte)) : null, ecouter,
+          data.voix.length > 1 && v.loc !== data.moi ? menu("Regrouper avec...", data.voix.filter((x) => x !== v).map((x) => [`${libelle(x.loc)} - voix ${x.numero}`, () => regrouper(v.loc, x.loc)]), false, "btn petit") : null);
+        carte.append(nomV, temps, actions);
+      }
+      bande.append(carte);
+    }
+    return bande;
+  }
+  async function regrouper(de, vers) {  // VX-11, VX-12
+    const r = await api("/api/regrouper", { reunion: nom, de, vers });
+    if (r.erreur) return toast(r.erreur.cause);
+    await charger();
+    toast("Voix regroupées.", async () => { await api("/api/annuler-regroupement", { reunion: nom }); await charger(); });
+  }
+  // VX-07 à VX-10, VX-19 à VX-24 : champ sur place, suggestions ouvertes avant toute frappe.
+  function nommer(v, carte) {
+    const avant = [...carte.childNodes];
+    const id = `nom-voix${v.numero}`;
+    const champ = el("input", { id, type: "text", role: "combobox", "aria-autocomplete": "list", "aria-expanded": "true", "aria-controls": `sugg${v.numero}`, placeholder: "Nom de cette voix", autocomplete: "off" });
+    const liste = el("ul", { className: "suggest", id: `sugg${v.numero}`, role: "listbox", "aria-label": `Noms proposés pour la voix ${v.numero}` });
+    const accord = el("input", { type: "checkbox" });
+    const caseAccord = el("label", { className: "case", hidden: true }, accord, el("span"));
+    const t = temoin();
+    let actif = -1, options = [];
+    const connues = new Set((v.suggestions || []).filter((s) => s.source === "connue").map((s) => s.nom));
+    const SOURCES = { vous: "vous", connue: "voix connue", participant: "participant", passe: "réunions passées" };
+    const dessinerListe = () => {
+      const f = champ.value.trim().toLowerCase();
+      options = (v.suggestions || []).filter((s) => !f || s.nom.toLowerCase().includes(f));
+      let sourcePrec = null;
+      liste.replaceChildren(...options.map((s, i) => {
+        const note = s.deja ? (s.proposee ? `proposée pour la ${s.deja.toLowerCase()}` : `déjà attribuée à la ${s.deja.toLowerCase()}`)
+          : s.confiance ? `voix connue, ${s.confiance >= 0.8 ? "très probable" : "probable"}` : SOURCES[s.source];
+        const groupe = s.deja ? "deja" : s.source;
+        const li = el("li", { role: "option", id: `${id}-o${i}`, "aria-selected": i === actif ? "true" : "false",
+          className: [s.deja ? "deja" : "", sourcePrec && groupe !== sourcePrec ? "sep" : ""].join(" ").trim(),
+          onmousedown: (e) => { e.preventDefault(); champ.value = s.nom; valider(); } }, s.nom, " ", el("small", {}, `- ${note}`));
+        sourcePrec = groupe;
+        return li;
+      }), ...(!(data.participants?.noms || []).length ? [el("li", { className: "sep", onmousedown: (e) => { e.preventDefault(); annuler(); $(".participants .btn.lien", racine)?.click(); } }, "Ajouter les participants")] : []));
+      champ.setAttribute("aria-activedescendant", actif >= 0 ? `${id}-o${actif}` : "");
+      // VX-08 : nom jamais vu (ni vous, ni voix connue) : case « avec son accord », non cochée.
+      const v2 = champ.value.trim();
+      caseAccord.hidden = !v2 || v2 === data.moi || connues.has(v2);
+      caseAccord.lastChild.textContent = `Reconnaître la voix de ${v2} dans les prochaines réunions (avec son accord)`;
+    };
+    let fini = false;
+    const annuler = () => { if (fini) return; fini = true; carte.replaceChildren(...avant); $(".btn", carte)?.focus(); };
+    const valider = async () => {
+      const nouveau = champ.value.trim();
+      if (!nouveau || fini) return;
+      const autre = data.voix.find((x) => x.loc === nouveau && x !== v);
+      if (autre) {  // VX-10, VX-21 : une personne coupée en deux voix
+        fini = true;
+        const choix = await dialogue({ titre: "Regrouper ces deux voix ?", contenu: [el("p", {}, `${nouveau} parle déjà dans cette réunion. Regrouper ces deux voix sous le nom ${nouveau} ?`)],
+          boutons: [{ texte: "Garder séparées", valeur: "separees" }, { texte: "Regrouper", classe: "principal-btn", valeur: "regrouper", focus: true }] });
+        if (choix === "regrouper") return regrouper(v.loc, autre.loc);
+        if (!choix) { fini = false; return champ.focus(); }
+        return envoyer(`${nouveau} (2)`);
+      }
+      fini = true;
+      envoyer(nouveau);
+    };
+    const envoyer = async (nouveau) => {
+      const r = await api("/api/renommer", { reunion: nom, ancien: v.loc, nouveau, retenir: !caseAccord.hidden && accord.checked });
+      if (r.erreur) { fini = false; return t.montrer(r); }
+      await charger();
+    };
+    champ.addEventListener("input", () => { actif = -1; dessinerListe(); });
+    champ.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); actif = Math.max(-1, Math.min(options.length - 1, actif + (e.key === "ArrowDown" ? 1 : -1))); if (actif >= 0) champ.value = options[actif].nom; dessinerListe(); }
+      else if (e.key === "Enter") { e.preventDefault(); valider(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); annuler(); }
+    });
+    carte.addEventListener("focusout", () => setTimeout(() => { if (!carte.contains(document.activeElement) && !document.querySelector("dialog")) annuler(); }, 0));
+    carte.replaceChildren(el("label", { className: "nom", for: id }, /^Voix \d+$/.test(v.loc) ? v.loc : `${v.loc} - voix ${v.numero}`), el("small", {}, `${duree(v.temps_s)} de parole`), champ, liste, caseAccord, t);
+    dessinerListe();
+    champ.focus();
+  }
+
+  // Recherche, filtre, lignes (LI-08 à LI-12, NT-07 à NT-14).
+  function outilsEtLignes(t) {
+    const cherche = el("input", { className: "cherche", id: "cherche-r", type: "search", "aria-label": "Rechercher dans cette réunion", placeholder: "Rechercher dans cette réunion" });
+    const compteur = el("span", { className: "compteur", role: "status" });
+    const prec = bouton("Précédent", () => aller(-1)), suiv = bouton("Suivant", () => aller(1));
+    const filtre = el("select", { id: "filtre" }, el("option", { value: "" }, "Toutes les voix"),
+      ...data.voix.map((v) => el("option", { value: v.loc }, libelle(v.loc))));
+    const notesCase = el("input", { type: "checkbox", checked: true });
+    const ul = listeLignes(t.blocs, data.notes, true);
+    let passages = [], courant = -1;
+    const filtrer = () => {
+      const brut = cherche.value.trim();
+      const exacte = /^["«“].*["»”]$/.test(brut) && brut.length > 1;
+      const mots = exacte ? [brut.slice(1, -1).trim().toLowerCase()] : brut.toLowerCase().split(/\s+/).filter(Boolean);
+      const qui = filtre.value;
+      let lignesVues = 0;
+      passages = [];
+      for (const li of $$("li.ligne", ul)) {
+        const note = li.classList.contains("note-l");
+        const p = $("p", li);
+        if (!p) continue;
+        const texte = li.dataset.texte;
+        const garde = note ? notesCase.checked : !qui || li.dataset.loc === qui;
+        li.hidden = !garde;
+        if (garde && !note) lignesVues++;
+        const ok = mots.length && mots.every((m) => texte.toLowerCase().includes(m));
+        p.replaceChildren(...surligner(texte, ok ? mots : []));
+        if (garde && ok) passages.push(...$$("mark", p).map((m) => ({ m, note })));
+      }
+      courant = passages.length ? 0 : -1;
+      if (brut && !passages.length) compteur.textContent = `Aucun passage ne contient « ${brut.replace(/^["«“]|["»”]$/g, "")} ».`;  // LI-10
+      else if (brut) montrer();
+      else compteur.textContent = qui ? `${pluriel(lignesVues, "prise de parole", "prises de parole")} sur ${t.blocs.length}` : "";  // LI-11
+      prec.disabled = suiv.disabled = passages.length < 2;
+    };
+    const montrer = () => {
+      passages.forEach((x, i) => x.m.classList.toggle("courant", i === courant));
+      const nNotes = passages.filter((x) => x.note).length;
+      compteur.textContent = `${courant + 1} sur ${passages.length}${nNotes ? `, dont ${pluriel(nNotes, "note")}` : ""}`;  // NT-13
+      passages[courant]?.m.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    };
+    const aller = (d) => { if (!passages.length) return; courant = (courant + d + passages.length) % passages.length; montrer(); };
+    cherche.addEventListener("input", filtrer);
+    cherche.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); aller(e.shiftKey ? -1 : 1); } });
+    filtre.addEventListener("change", filtrer);
+    notesCase.addEventListener("change", filtrer);
+    return [el("div", { className: "outils" }, cherche, compteur, prec, suiv,
+      el("label", { className: "sr", for: "filtre" }, "Filtrer par voix"), filtre,
+      el("label", { className: "case", style: "font-size:14px" }, notesCase, "Afficher les notes")), ul];
+  }
+  function surligner(texte, mots) {
+    if (!mots.length) return [texte];
+    const bas = texte.toLowerCase(), plages = [];
+    for (const m of mots) { let i = 0, j; while (m && (j = bas.indexOf(m, i)) >= 0) { plages.push([j, j + m.length]); i = j + m.length; } }
+    plages.sort((a, b) => a[0] - b[0]);
+    const sortie = []; let i = 0;
+    for (const [a, b] of plages) { if (a < i) continue; sortie.push(texte.slice(i, a), el("mark", {}, texte.slice(a, b))); i = b; }
+    sortie.push(texte.slice(i));
+    return sortie;
+  }
+  function jouer(t) { if (lecteurActif) { lecteurActif.audio.currentTime = Math.max(0, t); lecteurActif.audio.play().catch(() => {}); } }
+  function listeLignes(blocs, notes, interactif) {
+    const ul = el("ul", { className: "lignes" });
+    const elements = [...blocs.map((b, i) => ({ t: b.debut, b, i })), ...notes.map((n) => ({ t: n.t_s, n, note: true }))]
+      .sort((a, b) => a.t - b.t || (a.note ? 1 : 0) - (b.note ? 1 : 0));  // NT-07 : après la dernière ligne qui commence avant
+    for (const x of elements) ul.append(x.note ? ligneNote(x.n) : ligneParole(x.b, x.i, interactif));
+    return ul;
+  }
+  function boutonHeure(t, decalage) {
+    return el("button", { className: "heure", type: "button", disabled: !data.ecoute, "aria-label": `Écouter à ${heure(t)}`,
+      onclick: () => jouer(t - decalage) }, heure(t));
+  }
+  function ligneParole(b, i, interactif) {
+    const v = voixDe(b.loc);
+    const prop = !!data.transcription?.propositions[b.loc];
+    const p = el("p", { title: interactif ? "Cliquez pour corriger" : "" }, b.texte);
+    const qui = el("button", { className: `qui${prop ? " prop" : ""}`, type: "button", "aria-haspopup": "menu", onclick: (e) => { e.stopPropagation(); menuLigne(e.currentTarget, i); } }, libelle(b.loc));
+    const li = el("li", { className: "ligne", tabIndex: interactif ? 0 : -1, style: `--c:${couleur(v?.numero || 1)}`, "data-loc": b.loc, "data-texte": b.texte, "data-debut": b.debut, "data-fin": b.fin },
+      el("div", { className: "entete" }, boutonHeure(b.debut, 0.5), b.loc ? qui : null), p);  // LI-03 : 0,5 s avant
+    if (interactif) {
+      p.addEventListener("click", () => corrigerLigne(li, p, i, b));
+      li.addEventListener("keydown", async (e) => {  // VX-14 : touche 1 à 9
+        if (e.target !== li || !/^[1-9]$/.test(e.key)) return;
+        const cible = data.voix.find((x) => x.numero === Number(e.key));
+        if (!cible) return;
+        const r = await api("/api/attribuer-ligne", { reunion: nom, index: i, loc: cible.loc });
+        if (r.erreur) return toast(r.erreur.cause);
+        annoncer(`Ligne attribuée à ${libelle(cible.loc)}`);
+        await charger();
+      });
+    }
+    return li;
+  }
+  function menuLigne(ancre, i) {  // VX-13
+    ouvrirMenuFlottant(ancre, "Cette ligne est de :", [
+      ...data.voix.slice(0, 9).map((x) => [`${x.numero}. ${libelle(x.loc)}`, () => attribuer(i, x.loc)]),
+      ["Autre personne...", () => { const n = prompt("Nom de la personne"); if (n?.trim()) attribuer(i, n.trim()); }]]);
+  }
+  async function attribuer(i, loc) {
+    const r = await api("/api/attribuer-ligne", { reunion: nom, index: i, loc });
+    if (r.erreur) return toast(r.erreur.cause);
+    annoncer(`Ligne attribuée à ${libelle(loc)}`);
+    await charger();
+  }
+  function corrigerLigne(li, p, i, b) {  // LI-12
+    const zone = el("textarea", { value: b.texte, "aria-label": "Texte de la ligne, Entrée pour enregistrer, Échap pour annuler" });
+    let fini = false;
+    const t = temoin();
+    const finir = async (garder) => {
+      if (fini) return; fini = true;
+      const v = zone.value.trim();
+      if (garder && v && v !== b.texte) {
+        const r = await api("/api/ligne", { reunion: nom, index: i, texte: v });
+        if (r.erreur) { fini = false; return t.montrer(r); }
+        b.texte = v; li.dataset.texte = v; p.textContent = v;
+        zone.replaceWith(p); li.append(t); t.montrer(r);
+        return;
+      }
+      zone.replaceWith(p); t.remove();
+    };
+    zone.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finir(true); } if (e.key === "Escape") { e.stopPropagation(); finir(false); } });
+    zone.addEventListener("blur", () => finir(true));
+    p.replaceWith(zone);
+    zone.focus();
+  }
+  function ligneNote(n) {  // NT-07, NT-10 à NT-12
+    const p = el("p", { title: "Cliquez pour modifier" }, n.texte);
+    const li = el("li", { className: "ligne note-l", "data-texte": n.texte, "data-debut": n.t_s },
+      el("div", { className: "entete" }, boutonHeure(n.t_s, 0), el("span", { className: "note-tag" }, ico("pen"), "Note",  // NT-08 : sans avance
+        menu("...", [["Déplacer", () => deplacer(n, li)], ["Supprimer", () => supprimerNote(n)]], false, "btn lien", "Actions de la note"))), p);
+    p.addEventListener("click", () => {
+      const champ = el("input", { type: "text", value: n.texte, style: "grid-column:2;width:100%;min-height:36px;padding:4px 8px;border:1px solid var(--accent);border-radius:6px", "aria-label": "Texte de la note" });
+      let fini = false;
+      const finir = async (garder) => {
+        if (fini) return; fini = true;
+        if (garder && champ.value.trim() && champ.value.trim() !== n.texte) {
+          const r = await api("/api/note", { reunion: nom, action: "modifier", id: n.id, texte: champ.value });
+          if (r.erreur) return toast(r.erreur.cause);
+          await charger(); return;
+        }
+        champ.replaceWith(p);
+      };
+      champ.addEventListener("keydown", (e) => { if (e.key === "Enter") finir(true); if (e.key === "Escape") { e.stopPropagation(); finir(false); } });
+      champ.addEventListener("blur", () => finir(true));
+      p.replaceWith(champ); champ.focus();
+    });
+    return li;
+  }
+  async function supprimerNote(n) {
+    const r = await api("/api/note", { reunion: nom, action: "supprimer", id: n.id });
+    if (r.erreur) return toast(r.erreur.cause);
+    await charger();
+    toast("Note supprimée.", async () => { await api("/api/note", { reunion: nom, action: "ajouter", id: n.id, t_s: n.t_s, texte: n.texte }); await charger(); });
+  }
+  function deplacer(n, li) {
+    const champ = el("input", { type: "text", value: heure(n.t_s), size: 8, "aria-label": "Heure de la note" });
+    const erreur = el("span", { className: "ko-t", role: "status" });
+    const envoyer = async (t) => {
+      const r = await api("/api/note", { reunion: nom, action: "deplacer", id: n.id, t_s: t });
+      if (r.erreur) return (erreur.textContent = r.erreur.cause);
+      await charger();
+    };
+    const zone = el("div", { className: "actions", style: "grid-column:1/-1;margin-top:6px" },
+      bouton("-5 s", () => envoyer(Math.max(0, n.t_s - 5))), bouton("+5 s", () => envoyer(n.t_s + 5)), champ,
+      bouton("Valider", () => { const t = lireHeure(champ.value); if (t === null) erreur.textContent = `L'heure doit être entre 00:00 et ${heure(data.duree)}.`; else envoyer(t); }),
+      bouton("Annuler", () => zone.remove()), erreur);
+    li.append(zone);
+    champ.focus();
+  }
+
+  // Lecteur (LI-03 à LI-07, NT-09).
+  function lecteur() {
+    const audio = el("audio", { preload: "metadata", src: `/ecoute/${encodeURIComponent(nom)}.m4a` });
+    const play = el("button", { className: "rond play", type: "button", "aria-label": "Lecture" }, ico("play"));
+    const pos = el("input", { type: "range", min: 0, max: Math.round(data.duree || 1), value: 0, step: 1, "aria-label": "Position de lecture" });
+    const cour = el("span", {}, "00:00"), tot = el("span", {}, heure(data.duree));
+    const vitesse = el("select", { "aria-label": "Vitesse de lecture" }, ...[["1", "1x"], ["1.25", "1,25x"], ["1.5", "1,5x"], ["2", "2x"]].map(([v, t]) => el("option", { value: v }, t)));
+    const suivre = el("input", { type: "checkbox", checked: true });
+    const zoneNote = el("div", { className: "note-lecteur", hidden: true });
+    const noeud = el("div", { className: "lecteur", role: "region", "aria-label": "Lecteur" },
+      el("div", { className: "btns" }, el("button", { className: "rond", type: "button", "aria-label": "Reculer de 10 s", onclick: () => (audio.currentTime -= 10) }, ico("rew")), play,
+        el("button", { className: "rond", type: "button", "aria-label": "Avancer de 10 s", onclick: () => (audio.currentTime += 10) }, ico("fwd"))),
+      el("div", { className: "piste" }, cour, pos, tot),
+      el("div", { className: "droite" }, vitesse, el("button", { className: "btn petit", type: "button", onclick: () => noteLecteur() }, ico("pen"), "Ajouter une note")),
+      el("label", { className: "suivre" }, suivre, "Suivre la lecture"), zoneNote, audio);
+    play.onclick = () => (audio.paused ? audio.play().catch(() => {}) : audio.pause());
+    const majPlay = () => { play.replaceChildren(ico(audio.paused ? "play" : "pause")); play.setAttribute("aria-label", audio.paused ? "Lecture" : "Pause"); };
+    audio.addEventListener("play", majPlay); audio.addEventListener("pause", majPlay);
+    vitesse.onchange = () => (audio.playbackRate = Number(vitesse.value));
+    pos.oninput = () => (audio.currentTime = Number(pos.value));
+    let defilementAuto = 0;
+    audio.addEventListener("timeupdate", () => {  // LI-04
+      const x = audio.currentTime;
+      cour.textContent = heure(x); pos.value = Math.round(x);
+      let actif = null;
+      for (const li of $$("li.ligne:not(.note-l)", racine)) {
+        const on = x >= Number(li.dataset.debut) && x < Number(li.dataset.fin) + 0.5;
+        li.classList.toggle("actif", on);
+        if (on) actif = li;
+      }
+      if (actif && suivre.checked && !audio.paused && actif.dataset.vu !== "1") {
+        $$("li.ligne[data-vu]", racine).forEach((l) => delete l.dataset.vu);
+        actif.dataset.vu = "1";
+        defilementAuto = Date.now();
+        actif.scrollIntoView({ block: "center", behavior: "auto" });
+      }
+    });
+    const main = () => { if (Date.now() - defilementAuto > 300 && !audio.paused) suivre.checked = false; };  // un défilement à la main décoche
+    addEventListener("wheel", main, { passive: true }); addEventListener("touchmove", main, { passive: true });
+    function noteLecteur() {  // NT-09
+      const instant = audio.currentTime, jouait = !audio.paused;
+      audio.pause();
+      const champ = el("input", { type: "text", "aria-label": `Note à ${heure(instant)}` });
+      const fermer = () => { zoneNote.hidden = true; zoneNote.replaceChildren(); };
+      champ.addEventListener("keydown", async (e) => {
+        if (e.key === "Escape") { e.stopPropagation(); fermer(); if (jouait) audio.play(); }
+        if (e.key !== "Enter" || !champ.value.trim()) return;
+        const r = await api("/api/note", { reunion: nom, action: "ajouter", t_s: Math.round(instant * 10) / 10, texte: champ.value });
+        if (r.erreur) return toast(r.erreur.cause);
+        fermer();
+        const t2 = audio.currentTime;
+        await charger();
+        if (lecteurActif) { lecteurActif.audio.currentTime = t2; if (jouait) lecteurActif.audio.play(); }
+      });
+      zoneNote.replaceChildren(el("span", {}, `à ${heure(instant)}`), champ);
+      zoneNote.hidden = false;
+      champ.focus();
+    }
+    lecteurActif = { audio, noteLecteur, nettoyer() { removeEventListener("wheel", main); removeEventListener("touchmove", main); } };
+    if (positions[nom]) audio.addEventListener("loadedmetadata", () => (audio.currentTime = positions[nom].t), { once: true });
+    return noeud;
+  }
+
+  // LI-23 : ajouter une sélection aux mots à bien écrire.
+  const surSelection = (e) => {
+    $(".flottant.mot")?.remove();
+    const s = getSelection(), texte = s?.toString().trim();
+    if (!texte || texte.length > 40 || !racine.contains(s.anchorNode)) return;
+    if (e.type === "contextmenu") e.preventDefault();
+    const r = s.getRangeAt(0).getBoundingClientRect();
+    const b = el("div", { className: "flottant mot menu-liste", style: `top:${r.bottom + 6}px;left:${Math.max(8, r.left)}px` },
+      el("button", { type: "button", onclick: async () => { b.remove(); const x = await api("/api/mots", { mot: texte }); toast(x.erreur ? x.erreur.cause : "Pris en compte pour les prochaines transcriptions."); } }, "Ajouter aux mots à bien écrire"));
+    document.body.append(b);
+  };
+  racine.addEventListener("mouseup", (e) => setTimeout(() => surSelection(e), 0));
+  racine.addEventListener("contextmenu", surSelection);
+
+  charger(false).then(() => { if (positions[nom]) scrollTo(0, positions[nom].y); });
+  return {
+    noeud: racine,
+    maj() {
+      const tr = etat?.travaux?.[nom];
+      const fini = travailAvant?.en_cours && !tr?.en_cours;
+      travailAvant = tr;
+      if (fini) return charger();  // TR-07 : passe en lecture sans recharger la page
+      if (tr?.en_cours) {
+        const s = JSON.stringify([tr.etape, Math.round(tr.fraction * 100), Math.round(tr.fin_estimee / 60), tr.repli, tr.lent]);
+        if (s !== signature && data) { signature = s; dessiner(); }
+      }
+    },
+    quitter() {
+      if (lecteurActif) { positions[nom] = { t: lecteurActif.audio.currentTime, y: scrollY }; lecteurActif.audio.pause(); lecteurActif.nettoyer(); lecteurActif = null; }
+      else positions[nom] = { t: 0, y: scrollY };
+      $(".flottant")?.remove();
+    },
+    clavier(e) {  // LI-06, LI-07, NT-09 : focus hors d'un champ
+      if (!lecteurActif || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || document.querySelector("dialog")) return;
+      const a = lecteurActif.audio;
+      if (e.key === " " && e.target.tagName !== "BUTTON") { e.preventDefault(); a.paused ? a.play().catch(() => {}) : a.pause(); }
+      else if (e.key === "ArrowLeft" && !e.target.closest(".ligne")) { e.preventDefault(); a.currentTime -= 5; }
+      else if (e.key === "ArrowRight" && !e.target.closest(".ligne")) { e.preventDefault(); a.currentTime += 5; }
+      else if ((e.key === "n" || e.key === "N") && !e.metaKey && !e.ctrlKey) { e.preventDefault(); lecteurActif.noteLecteur(); }
+    },
+  };
+}
+
+// Menus déroulants (details), refermés au clic ailleurs et par Échap.
+function menu(texte, items, droite = false, classe = "btn", label) {
+  const liste = el("div", { className: `menu-liste${droite ? " droite-m" : ""}`, role: "menu" },
+    ...items.map(([t, f, cl]) => el("button", { role: "menuitem", type: "button", className: cl || "", onclick: (e) => { d.open = false; f(e); } }, t)));
+  const d = el("details", { className: "menu" }, el("summary", { className: classe, "aria-label": label || null }, texte), liste);
+  return d;
+}
+function ouvrirMenuFlottant(ancre, titre, items) {
+  $(".flottant.m")?.remove();
+  const r = ancre.getBoundingClientRect();
+  const m = el("div", { className: "flottant m menu-liste", role: "menu", "aria-label": titre, style: `top:${Math.min(r.bottom + 4, innerHeight - 40)}px;left:${Math.max(8, Math.min(r.left, innerWidth - 248))}px` },
+    el("div", { className: "titre-m" }, titre),
+    ...items.map(([t, f]) => el("button", { role: "menuitem", type: "button", onclick: () => { m.remove(); ancre.focus(); f(); } }, t)));
+  document.body.append(m);
+  $("button", m).focus();
+  m.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); m.remove(); ancre.focus(); } });
+}
+document.addEventListener("click", (e) => {
+  for (const d of $$("details.menu[open]")) if (!d.contains(e.target)) d.open = false;
+  if (!e.target.closest(".flottant")) $$(".flottant").forEach((f) => f.remove());
+});
+
+// ---------------------------------------------------------------- réglages (RG, MD)
+function vueReglages() {
+  const racine = el("div", { className: "colonne" });
+  (async () => {
+    const [c, vocab, connues] = await Promise.all([chargerConfig(), api("/api/vocabulaire"), api("/api/voix")]);
+    if (!c) return;
+    const r = c.reglages, mac = c.plateforme === "darwin";
+    const sauver = async (champs, t) => { const res = await api("/api/configuration", champs); t?.montrer(res); if (!res.erreur) await chargerConfig(); return res; };
+    // Votre nom
+    const tNom = temoin();
+    const nomC = el("input", { id: "r-nom", type: "text", value: c.moi, autocomplete: "off" });
+    nomC.addEventListener("change", () => sauver({ moi: nomC.value }, tNom));
+    // Dossier
+    const tDos = temoin();
+    const dossier = el("div", { className: "reglage" }, el("h3", {}, "Dossier des réunions"),
+      el("div", { className: "ligne-r" }, el("code", { className: "chemin" }, c.dossier),
+        bouton("Ouvrir", () => api("/api/ouvrir", { cible: "reunions" })),
+        c.dossier_impose ? null : bouton("Changer...", () => {
+          const champ = el("input", { type: "text", value: c.dossier, "aria-label": "Chemin complet du dossier des réunions" });
+          const valider = async () => { const res = await sauver({ dossier: champ.value }, tDos); if (!res.erreur) racine.replaceWith(vueReglages().noeud); };
+          champ.addEventListener("keydown", (e) => { if (e.key === "Enter") valider(); });
+          dossier.append(el("div", { className: "ligne-r" }, champ, bouton("Valider", valider, "btn petit principal-btn")));
+          champ.focus();
+        }), tDos),
+      el("p", { className: "note-aide" }, "Les réunions déjà enregistrées restent dans l'ancien dossier."));
+    // Agenda (RG-06)
+    const tAg = temoin();
+    const ics = el("input", { id: "r-ics", type: "password", autocomplete: "off", placeholder: "https://calendar.google.com/calendar/ical/..." });
+    const agendaBloc = el("div", { className: "reglage" }, el("h3", {}, "Agenda Google ", el("span", { style: "font-weight:400;color:var(--body-soft)" }, "(facultatif)")),
+      el("p", { className: "note-aide" }, "Branché, Réunion reprend le titre de la réunion en cours et les noms des invités. Réunion lit votre agenda, n'y écrit jamais."),
+      ...(etat?.agenda ? [el("div", { className: "ligne-r" }, el("b", { className: "fait" }, "Branché"),
+        bouton("Débrancher", async () => { const res = await api("/api/agenda", { url: "" }); tAg.montrer(res); await rafraichir(); racine.replaceWith(vueReglages().noeud); }), tAg)]
+      : [el("ol", { className: "etapes-agenda" }, el("li", {}, "Dans Google Agenda sur le web : Paramètres, votre agenda, « Intégrer l'agenda »."),
+          el("li", {}, "Copiez l'« adresse secrète au format iCal » et collez-la ici. Ne la partagez pas : elle ouvre tout votre agenda.")),
+        el("div", { className: "ligne-r" }, el("label", { className: "sr", for: "r-ics" }, "Adresse secrète de l'agenda"), ics,
+          bouton("Brancher", async () => { const res = await api("/api/agenda", { url: ics.value }); tAg.montrer(res); if (!res.erreur) { await rafraichir(); racine.replaceWith(vueReglages().noeud); } }, "btn petit principal-btn"), tAg)]));
+    // Voix connues (VX-16)
+    const anciennes = c.voix_anciennes && !memoire.lire("voix-anciennes-vu", false) ? el("p", { className: "note-aide", role: "status" },
+      `${pluriel(c.voix_anciennes, "voix apprise", "voix apprises")} avec l'ancienne méthode de séparation ne sont plus reconnues : nommez-les de nouveau, avec l'accord de la personne. `,
+      bouton("Compris", (ev) => { memoire.ecrire("voix-anciennes-vu", true); ev.target.closest("p").remove(); }, "btn lien")) : null;
+    const voixBloc = el("div", { className: "reglage" }, el("h3", {}, "Voix connues"), anciennes,
+      Array.isArray(connues) && connues.length ? el("ul", { className: "voix-connues" }, ...connues.map((v) => el("li", {},
+        el("span", {}, v.nom === c.moi ? `${v.nom} (vous)` : v.nom, el("small", {}, [pluriel(v.reunions, "réunion"),
+          v.modele !== c.modele_voix ? "ancienne méthode, non reconnue" : null, v.vu ? `reconnue le ${new Date(v.vu).getDate()} ${MOIS[new Date(v.vu).getMonth()]}` : null].filter(Boolean).join(" - "))),
+        bouton("Oublier", async (ev) => {
+          const ok = await dialogue({ titre: `Oublier la voix de ${v.nom} ?`, contenu: [el("p", {}, "Elle ne sera plus reconnue. Les réunions passées gardent le nom.")],
+            boutons: [{ texte: "Annuler", focus: true }, { texte: "Oublier", classe: "rec", valeur: true }] });
+          if (!ok) return;
+          const res = await api("/api/voix/oublier", { nom: v.nom, modele: v.modele });
+          if (res.erreur) return toast(res.erreur.cause);
+          ev.target.closest("li").remove();
+        }, "btn petit danger"))))
+      : el("p", { className: "note-aide" }, "Aucune voix connue pour l'instant. Quand vous nommez une voix avec l'accord de la personne, elle est reconnue aux réunions suivantes."));
+    // Mots à bien écrire (RG-07)
+    const tMots = temoin();
+    const mots = el("textarea", { id: "r-mots", spellcheck: false, value: vocab.texte || "" });
+    mots.addEventListener("change", async () => tMots.montrer(await api("/api/vocabulaire", { texte: mots.value })));
+    // Avancé (RG-08)
+    const tAv = temoin();
+    const qualites = el("fieldset", {}, el("legend", {}, "Qualité de la transcription"),
+      ...c.qualites.map((q) => el("label", { className: "case gros" },
+        el("input", { type: "radio", name: "q", checked: q.modele === c.modele, onchange: async () => {
+          const res = await sauver({ modele: q.modele }, tAv);
+          if (!res.erreur && !q.telecharge) { const d = await api("/api/telecharger", { modele: q.modele }); if (d.erreur) tAv.montrer(d); }
+          await rafraichir();
+        } }),
+        `${q.nom}${q.conseillee ? ` (conseillée pour ${mac ? "ce Mac" : "ce PC"})` : ""} - ${q.mo} Mo - environ ${duree(q.k * 3600)} pour 1 h de réunion `,
+        el("span", { className: `etat${q.telecharge ? " pret" : ""}` }, q.telecharge ? "Téléchargée" : "À télécharger"))),
+      el("div", { id: "telechargement-r", "aria-live": "polite" }),
+      el("p", { className: "note-aide" }, `La séparation des voix${c.mo_separation ? ` (${c.mo_separation} Mo)` : ""} est téléchargée à part, une seule fois.`), tAv);
+    const langue = el("select", { id: "r-langue", className: "sel" }, ...Object.entries(c.langues).map(([code, n]) =>
+      el("option", { value: code, selected: code === r.langue }, code === c.langue_systeme ? `${n} (langue du système)` : n)));
+    langue.addEventListener("change", () => sauver({ langue: langue.value }, tAv));
+    // Micro et son (RG-11, RG-12)
+    const jauges = el("div", { className: "jauges", hidden: true });
+    const tester = bouton("Tester (3 s)", async () => {
+      const res = await api("/api/test-son", { secondes: 3 });
+      if (res.erreur) return toast(res.erreur.cause);
+      jauges.hidden = false;
+      const suivre = setInterval(() => {
+        const ts = etat?.test_son;
+        if (!ts) return;
+        jauges.replaceChildren(...[["Votre micro", ts.niveau_micro], ["Son de l'ordinateur", ts.niveau_systeme]].map(([n, db]) =>
+          el("div", { className: "jauge", "aria-label": `${n} : ${motNiveau(db)}` }, el("span", {}, n), el("span", { className: "barre", "aria-hidden": "true" }, el("i", { style: `width:${largeur(db)}` })), el("b", {}, motNiveau(db)))));
+        if (ts.erreur) { clearInterval(suivre); jauges.append(el("p", { className: "ko-t" }, ts.erreur.cause)); }
+        if (!ts.en_cours) clearInterval(suivre);
+      }, 300);
+    });
+    const audio = el("fieldset", {}, el("legend", {}, "Micro et son de l'ordinateur"));
+    if (mac) audio.append(el("p", {}, "Réunion suit le micro et la sortie choisis dans les réglages du Mac."));
+    else if (c.peripheriques) {
+      const p = c.peripheriques, liste = (quoi, libelleL, items, defaut, choisi) => {
+        const sel = el("select", { id: `r-${quoi}`, className: "sel" }, el("option", { value: "" }, `Celui de Windows (${defaut})`),
+          ...items.map((d) => el("option", { value: d.id, selected: d.id === choisi }, d.nom)));
+        sel.addEventListener("change", () => sauver({ [quoi]: sel.value }, tAv));
+        return [el("label", { className: "champ", for: `r-${quoi}` }, libelleL), sel];
+      };
+      audio.append(...liste("micro", "Micro", p.micros, p.micro_defaut, r.micro), ...liste("sortie", "Où entendez-vous la visio ?", p.sorties, p.sortie_defaut, r.sortie));
+    } else audio.append(el("p", { className: "ko-t" }, "Le micro ou la sortie audio ne répond pas."));
+    audio.append(el("div", { className: "actions", style: "margin-top:8px" }, tester), jauges);
+    const directC = el("input", { type: "checkbox", checked: etat?.direct_par_defaut });
+    directC.addEventListener("change", () => sauver({ direct: directC.checked }, tAv));
+    const sepC = el("input", { type: "checkbox", checked: r.locuteurs });
+    sepC.addEventListener("change", () => sauver({ locuteurs: sepC.checked }, tAv));
+    const cle = el("input", { id: "r-cle", type: "password", autocomplete: "off", placeholder: c.jeton ? "Clé enregistrée" : "" });
+    const tCle = temoin();
+    const envoyerCle = async (v) => { const res = await api("/api/jeton", { jeton: v }); tCle.montrer(res); if (!res.erreur) { cle.value = ""; await chargerConfig(); } };
+    const verifs = el("ul", { className: "installation" }, ...c.verifications.map((v) => el("li", {},
+      ico(v.ok ? "check" : "x", `ico ${v.ok ? "ok-i" : "ko-i"}`), el("span", {}, `${v.titre} : ${v.detail}`),
+      v.action === "telecharger" ? bouton("Ouvrir la page de téléchargement", () => window.open(c.page_telechargement, "_blank", "noopener"))
+        : v.action === "preparer" ? bouton("Télécharger", async () => { await api("/api/preparer", {}); await rafraichir(); })
+        : v.action === "ouvrir_dossier" ? bouton("Ouvrir le dossier des réunions", () => api("/api/ouvrir", { cible: "reunions" })) : null)));
+    const maj = el("p", { role: "status" });
+    const effacer = bouton("Effacer les fichiers de Réunion...", async () => {  // MD-09, MD-10
+      const tailles = await api("/api/effacer");
+      const aussi = el("input", { type: "checkbox" });
+      const ok = await dialogue({ titre: "Effacer les fichiers de Réunion ?", contenu: [el("p", {}, "Seront effacés de cet ordinateur :"),
+        el("ul", {}, el("li", {}, `Fichiers de transcription et de séparation des voix (${tailles.modeles_mo} Mo)`), el("li", {}, "Réglages et voix connues"), el("li", {}, "Journaux")),
+        el("label", { className: "case" }, aussi, `Effacer aussi toutes mes réunions (${String(tailles.reunions_go).replace(".", ",")} Go)`)],
+        boutons: [{ texte: "Annuler", focus: true }, { texte: "Effacer", classe: "rec", valeur: true }] });
+      if (!ok) return;
+      const res = await api("/api/effacer", { confirme: true, reunions: aussi.checked });
+      maj.textContent = res.erreur ? res.erreur.cause : "Fichiers effacés. Vous pouvez maintenant supprimer l'application.";
+    }, "btn petit danger");
+    const avance = el("details", { className: "avance", open: memoire.lire("avance-ouvert", false) }, el("summary", {}, "Réglages avancés"),
+      el("div", { className: "contenu" }, qualites,
+        el("label", { className: "champ", for: "r-langue" }, "Langue parlée"), langue, audio,
+        el("fieldset", {}, el("legend", {}, "Transcription en direct"), el("label", { className: "case gros" }, directC, "Afficher un brouillon pendant l'enregistrement"),
+          el("p", { className: "note-aide" }, "Utile pour suivre, mais il occupe l'ordinateur pendant l'appel : sur une machine peu puissante, la visio peut ralentir.")),
+        el("fieldset", {}, el("legend", {}, "Séparation des voix"), el("label", { className: "case gros" }, sepC, "Séparer les voix (plus long)"),
+          // Clé rangée mais méthode absente (décision du 03/11 : facultative partout) : on propose de l'installer.
+          c.jeton && !c.pyannote_installe ? el("p", { className: "note-aide", id: "pyannote-absent" },
+            "La clé est enregistrée, mais l'autre méthode de séparation n'est pas installée sur cet ordinateur (plus de 1 Go). ",
+            bouton("L'installer", async (ev) => {
+              const res = await api("/api/installer-pyannote", {});
+              ev.target.replaceWith(el("span", { role: "status" }, res.erreur ? res.erreur.cause : "Installation en cours..."));
+            }, "btn lien")) : null,
+          el("details", { className: "sous" }, el("summary", {}, "Autre méthode de séparation"),
+            el("p", { className: "note-aide" }, "Si vous avez un compte Hugging Face, collez ici votre clé d'accès pour utiliser leur méthode de séparation. Facultatif."),
+            el("div", { className: "ligne-r" }, el("label", { className: "sr", for: "r-cle" }, "Clé d'accès Hugging Face"), cle,
+              bouton("Enregistrer la clé", () => envoyerCle(cle.value)), c.jeton ? bouton("Retirer la clé", () => envoyerCle(""), "btn petit danger") : null, tCle))),
+        el("fieldset", {}, el("legend", {}, "État de l'installation"), verifs, c.verifications.some((v) => v.titre === "Séparation des voix" && !v.ok) ? depotManuel(c) : null),
+        el("fieldset", {}, el("legend", {}, "À propos et mise à jour"),
+          el("p", {}, `Réunion, version ${c.version}.`),
+          // Attribution exigée par les licences des fichiers de séparation des voix.
+          el("p", { className: "note-aide" }, "La séparation des voix utilise sherpa-onnx (Apache-2.0), la segmentation pyannote 3.0 (MIT) et le modèle d'empreintes vocales NVIDIA TitaNet-small (CC-BY-4.0)."),
+          el("div", { className: "actions" }, bouton("Rechercher une mise à jour", async () => {  // MD-01 à MD-04
+            maj.textContent = "Recherche...";
+            const res = await api("/api/mise-a-jour", {});
+            if (res.erreur) return (maj.textContent = res.erreur.cause);
+            maj.replaceChildren(res.a_jour ? "Vous avez la dernière version." : el("span", {}, `Version ${res.derniere} disponible. `,
+              el("a", { href: res.page, target: "_blank", rel: "noopener" }, "Ce qui change"), " ",
+              bouton("Télécharger", () => window.open(res.page, "_blank", "noopener")),
+              el("p", {}, "Installez-la par-dessus : vos réunions, vos réglages et les voix connues sont gardés.")));
+          })), maj,
+          el("p", { className: "note-aide" }, "Contacte la page du projet sur github.com, rien d'autre n'est envoyé."),
+          el("h4", {}, "Désinstaller"),
+          el("p", {}, mac ? `Quittez Réunion, puis glissez l'application Réunion dans la Corbeille. Vos réunions restent dans ${c.dossier}.`
+            : `Paramètres de Windows > Applications > Réunion > Désinstaller. Vos réunions restent dans ${c.dossier}.`),
+          el("div", { className: "actions" }, effacer))));
+    avance.addEventListener("toggle", () => memoire.ecrire("avance-ouvert", avance.open));
+    racine.replaceChildren(
+      el("a", { className: "btn retour", href: retourDepuisReglages() }, ico("back"), "Retour aux réunions"),
+      el("h2", {}, "Réglages"),
+      el("div", { className: "reglage" }, el("h3", {}, el("label", { for: "r-nom" }, "Votre nom")), el("div", { className: "ligne-r" }, nomC, tNom),
+        el("p", { className: "note-aide" }, "Ce qui est dit dans votre micro sera noté sous ce nom.")),
+      dossier, agendaBloc, voixBloc,
+      el("div", { className: "reglage" }, el("h3", {}, el("label", { for: "r-mots" }, "Mots à bien écrire")),
+        el("p", { className: "note-aide" }, "Noms de clients, de produits, sigles. Un par ligne. Pris en compte pour les prochaines transcriptions."), mots, tMots),
+      avance);
+  })();
+  let installAvant = false;
+  return { noeud: racine, maj() {
+    const ip = etat?.installation_pyannote;
+    if (installAvant && ip && !ip.en_cours) racine.replaceWith((vue = vueReglages()).noeud);  // installation finie
+    installAvant = !!ip?.en_cours;
+    const p = etat?.preparation, z = $("#telechargement-r");
+    if (z) z.replaceChildren(...(p?.en_cours ? [el("p", { className: "note-aide" }, `Téléchargement : ${p.fait_mo} Mo sur ${p.total_mo} Mo`), el("progress", { max: p.total_mo, value: p.fait_mo, "aria-label": "Téléchargement" })]
+      : p?.erreur ? [el("p", { className: "ko-t" }, p.erreur.cause)] : []));
+  }, clavier(e) {  // RG-02
+    if (e.key === "Escape" && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !document.querySelector("dialog")) location.hash = retourDepuisReglages();
+  } };
+}
+let avantReglages = "#";
+const retourDepuisReglages = () => avantReglages;
+
+// ---------------------------------------------------------------- premier lancement (PL)
+function vueAccueil1() {
+  const racine = el("div", { className: "accueil1 carte" });
+  let etape = Math.max(1, Math.min(5, etat?.accueil_etape || 1));
+  let essai = null;  // état local de l'essai du micro ou du son
+  const aller = async (n) => { etape = n; essai = null; await api("/api/configuration", { accueil_etape: n }); dessiner(); $("h2", racine)?.focus(); };
+  const machineTexte = () => {
+    const m = config?.machine, q = config?.qualites?.find((x) => x.conseillee);
+    if (!m || !q) return "";
+    const lieu = m.systeme === "mac" ? "ce Mac" : m.carte_graphique === "nvidia" ? "ce PC" : "cet ordinateur";
+    const total = q.mo + (config.mo_separation || 0);
+    const raison = q.code === "legere" ? " - cet ordinateur a peu de mémoire" : "";
+    const lent = q.code === "rapide" ? " La transcription prendra à peu près la durée de la réunion." : "";
+    return `Qualité choisie pour ${lieu} : ${q.nom}${raison} (${total} Mo à télécharger, une seule fois).${lent}`;
+  };
+  const preparationBas = () => {
+    const p = etat?.preparation;
+    if (!p || etat.fichiers_prets) return null;
+    return el("div", { className: "dl" }, el("span", {}, `Préparation : ${p.fait_mo} Mo sur ${p.total_mo} Mo`),
+      el("progress", { max: p.total_mo, value: p.fait_mo, "aria-label": "Préparation" }));
+  };
+  const entete = (n, retour = true) => [el("div", { className: "etape-n" }, el("span", {}, `Étape ${n} sur 5`),
+    retour && n > 1 ? el("button", { className: "btn lien", type: "button", onclick: () => aller(n - 1) }, ico("back"), "Retour") : null),
+    el("div", { className: "points", "aria-hidden": "true" }, ...[1, 2, 3, 4, 5].map((i) => el("i", { className: i <= n ? "f" : "" })))];
+  const lancerEssai = async (quoi) => {
+    essai = { quoi, debut: Date.now(), fini: false };
+    const r = await api("/api/test-son", { secondes: 10 });
+    if (r.erreur) essai.erreur = r.erreur;
+    dessiner();
+  };
+  function dessiner() {
+    const parts = [];
+    if (etape === 1) {
+      parts.push(...entete(1), el("h2", { tabIndex: -1 }, "Bienvenue dans Réunion"),
+        el("p", { style: "margin-top:10px" }, "Réunion enregistre vos réunions et les met par écrit, avec qui a dit quoi. Tout se fait sur cet ordinateur : ni le son ni le texte ne partent sur internet."),
+        el("p", { style: "margin-top:10px" }, "Aucun robot ne rejoint la réunion. Prévenez les participants que vous enregistrez."),
+        el("p", { className: "note-aide", style: "margin-top:14px" }, machineTexte()),
+        el("div", { className: "actions", style: "margin-top:20px;justify-content:flex-end" }, bouton("Commencer", async () => {
+          await api("/api/configuration", { accueil_fini: false });
+          const r = await api("/api/preparer", {});  // PL-03 : le téléchargement démarre ici
+          if (r.erreur && r.erreur.code !== "telechargement_en_cours") return dessinerErreur(r.erreur);
+          aller(2);
+        }, "btn principal-btn")));
+    } else if (etape === 2) {
+      const champ = el("input", { id: "pl-nom", type: "text", value: config?.moi || "", autocomplete: "off", "aria-describedby": "pl-nom-aide" });
+      parts.push(...entete(2), el("h2", { tabIndex: -1 }, "Votre nom"),
+        el("label", { className: "champ", for: "pl-nom" }, "Votre nom dans les transcriptions"), champ,
+        el("p", { className: "note-aide", id: "pl-nom-aide", style: "margin-top:4px" }, "Ce qui est dit dans votre micro sera noté sous ce nom."),
+        preparationBas(),
+        el("div", { className: "actions", style: "margin-top:20px;justify-content:flex-end" }, bouton("Continuer", async () => {
+          await api("/api/configuration", { moi: champ.value }); await chargerConfig(); aller(3);
+        }, "btn principal-btn")));
+    } else if (etape === 3 || etape === 4) {
+      const micro = etape === 3, quoi = micro ? "micro" : "son";
+      const ts = etat?.test_son, entendu = essai && ts && (micro ? ts.micro_entendu : ts.son_entendu);
+      const echec = essai && (essai.erreur || ts?.erreur || (ts && !ts.en_cours && !entendu));
+      const db = ts && (micro ? ts.niveau_micro : ts.niveau_systeme);
+      parts.push(...entete(etape), el("h2", { tabIndex: -1 }, micro ? "Micro" : "Son de l'ordinateur"));
+      if (micro) parts.push(el("p", { style: "margin-top:8px" }, "Pour noter ce que vous dites, Réunion doit entendre votre micro."));
+      else if (estMac()) parts.push(el("p", { style: "margin-top:8px" }, "Pour enregistrer les personnes en visio, Réunion doit entendre le son de ce Mac. macOS appelle cet accès « Enregistrement de l'écran et de l'audio système » : seul le son est gardé, jamais l'image."));
+      else parts.push(el("p", { style: "margin-top:8px" }, "Pour enregistrer les personnes en visio, Réunion doit entendre le son de cet ordinateur."));
+      if (echec) {  // PL-08
+        const err = essai.erreur || ts?.erreur;
+        parts.push(el("div", { style: "margin-top:16px" }, bandeau("rouge", [el("b", {}, micro ? "Nous n'entendons pas votre micro." : "Nous n'entendons pas le son de l'ordinateur."),
+          err ? ` ${err.cause}` : micro ? " L'accès a été refusé, ou rien n'a été entendu en 10 s." : " Rien n'a été entendu en 10 s."],
+          [bouton(micro ? "Ouvrir les réglages du micro" : "Ouvrir les réglages", () => ouvrirReglagesSysteme(micro ? "micro" : estMac() ? "ecran" : "son")),
+            bouton("Réessayer", () => lancerEssai(quoi))])));
+        // PL-10 : sous Windows, le choix de la sortie n'apparaît que si le test n'entend rien.
+        if (!micro && !estMac() && config?.peripheriques) {
+          const sel = el("select", { id: "pl-sortie", className: "sel" }, el("option", { value: "" }, `Celui de Windows (${config.peripheriques.sortie_defaut})`),
+            ...config.peripheriques.sorties.map((d) => el("option", { value: d.id, selected: d.id === config.reglages.sortie }, d.nom)));
+          sel.addEventListener("change", () => api("/api/configuration", { sortie: sel.value }));
+          parts.push(el("label", { className: "champ", for: "pl-sortie" }, "Où entendez-vous la visio ?"), sel);
+        }
+      } else if (!essai) {
+        parts.push(el("div", { className: "actions", style: "margin-top:16px" },
+          bouton(micro ? "Autoriser le micro" : estMac() ? "Autoriser le son de l'ordinateur" : "Tester le son de l'ordinateur", () => lancerEssai(quoi), "btn principal-btn")));
+      } else {
+        parts.push(el("p", { style: "margin-top:12px", role: "status" }, entendu
+          ? el("span", { className: "fait", style: "font-size:16px;display:inline-flex;gap:6px;align-items:center" }, ico("check"), micro ? "Votre micro fonctionne." : "Le son de l'ordinateur est bien entendu.")
+          : micro ? "Dites quelques mots." : "Lancez une vidéo ou une musique quelques secondes."));
+      }
+      parts.push(el("div", { className: "jauge", style: "margin-top:16px", "aria-label": `${micro ? "Votre micro" : "Son de l'ordinateur"} : ${motNiveau(db)}` },
+        el("span", {}, micro ? "Votre micro" : "Son de l'ordinateur"), el("span", { className: "barre", "aria-hidden": "true" }, el("i", { style: `width:${largeur(db)}` })), el("b", {}, motNiveau(db))));
+      parts.push(preparationBas(), el("div", { className: "actions", style: "margin-top:20px;justify-content:space-between" },
+        bouton("Passer cette étape", async () => {  // PL-08 : l'accueil dira « Il manque une étape »
+          if (etat?.test_son?.en_cours) await api("/api/test-son", { arreter: true });
+          await api("/api/configuration", { [micro ? "etat_micro" : "etat_son"]: "refuse" });
+          aller(etape + 1);
+        }, "btn lien"),
+        bouton("Continuer", async () => { if (etat?.test_son?.en_cours) await api("/api/test-son", { arreter: true }); aller(etape + 1); }, "btn principal-btn", { disabled: !entendu })));
+    } else {
+      const p = etat?.preparation, prets = etat?.fichiers_prets;
+      const fini = prets && (!p || !p.en_cours);
+      const pct = p ? Math.round(p.fait_mo / Math.max(1, p.total_mo) * 100) : 100;
+      const coche = (texte, cl) => el("li", { className: cl }, cl === "ok" ? ico("check") : el("span", { className: "rondpt", "aria-hidden": "true" }), texte);
+      const etapeP = fini ? "fini" : p?.etape || "telechargement";
+      const ordre = ["telechargement", "preparation", "vitesse", "fini"];
+      const cl = (nomE) => ordre.indexOf(etapeP) > ordre.indexOf(nomE) ? "ok" : etapeP === nomE ? "cours" : "attente";
+      parts.push(...entete(5), el("h2", { tabIndex: -1 }, "Préparation pour cet ordinateur"));
+      if (p?.erreur) {
+        const e = p.erreur;  // PL-13, PL-14
+        parts.push(el("div", { style: "margin-top:16px" }, e.code === "reseau_absent"
+          ? bandeau("jaune", [el("b", {}, "Téléchargement en pause : pas de connexion internet."), ` Il reprendra seul au retour du réseau. Les ${p.fait_mo} Mo déjà reçus sont gardés.`],
+            [bouton("Réessayer maintenant", () => api("/api/preparer", { reessayer: true }))])
+          : bandeau("rouge", e.cause, [bouton("Réessayer", () => api("/api/preparer", {}))])));
+      }
+      parts.push(el("ul", { className: "coches" },
+        coche(cl("telechargement") === "ok" || fini ? `Fichiers téléchargés (${p?.total_mo || config?.qualites?.find((q) => q.modele === config.modele)?.mo || 0} Mo)` : `Téléchargement : ${p?.fait_mo || 0} Mo sur ${p?.total_mo || 0} Mo`, fini ? "ok" : cl("telechargement")),
+        coche("Préparation pour cet ordinateur", fini ? "ok" : cl("preparation")),
+        coche("Essai de vitesse", fini ? "ok" : cl("vitesse"))));
+      if (!fini) parts.push(el("div", { style: "display:flex;gap:10px;align-items:center" }, el("progress", { max: 100, value: pct, "aria-label": "Téléchargement" }), el("b", {}, `${pct} %`)));
+      if (config?.mo_separation) parts.push(el("p", { className: "note-aide", style: "margin-top:6px" },
+        `${(p?.total_mo || 0)} Mo = fichiers de transcription (${(p?.total_mo || 0) - config.mo_separation} Mo) et de séparation des voix (${config.mo_separation} Mo).`));
+      if (p && !p.separation_ok) parts.push(el("p", { style: "margin-top:12px" }, "Les voix ne seront pas séparées pour l'instant. Réunion réessaiera au prochain lancement."), depotManuel(config));  // PL-16
+      parts.push(el("p", { style: "margin-top:12px" }, fini
+        ? `C'est prêt. Sur cet ordinateur, une réunion de 1 h sera transcrite en ${estimation((config?.vitesse_k || 1) * 3600)} environ.`  // PL-11
+        : "Vous pouvez déjà enregistrer : la transcription attendra la fin de la préparation."));  // PL-12
+      parts.push(el("div", { className: "actions", style: "margin-top:20px;justify-content:flex-end" }, bouton("Aller à mes réunions", async () => {
+        await api("/api/configuration", { accueil_fini: true });
+        await rafraichir();
+        location.hash = "#";
+      }, "btn principal-btn")));
+    }
+    racine.replaceChildren(...parts.filter(Boolean));
+  }
+  const dessinerErreur = (e) => racine.append(blocErreur(e));
+  chargerConfig().then(dessiner);
+  let sig = "";
+  return { noeud: racine, maj() {
+    if (racine.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+    const s = JSON.stringify([etat.preparation, etat.fichiers_prets, etat.test_son, etape]);
+    if (s !== sig) { sig = s; dessiner(); }
+  } };
+}
+
+// ---------------------------------------------------------------- routes
+function router() {
+  if (!etat) return;
+  vue?.quitter?.();
+  const premier = !etat.accueil_fini;
+  $("#accueil1").hidden = !premier;
+  $("#page").hidden = premier;
+  if (premier) {
+    vue = vueAccueil1();
+    $("#accueil1").replaceChildren(vue.noeud);
+    return;
+  }
+  const h = location.hash;
+  let m;
+  const page = $("#page");
+  if (h === "#reglages") { vue = vueReglages(); }
+  else if (h === "#enreg") vue = etat.enregistrement ? vueEnregistrement() : (location.hash = "#", vueAccueil());
+  else if ((m = h.match(/^#reunion\/([^?]+)(?:\?q=(.*))?$/))) vue = vueReunion(decodeURIComponent(m[1]), m[2] && decodeURIComponent(m[2]));
+  else vue = vueAccueil();
+  if (h !== "#reglages") avantReglages = h || "#";
+  const detail = h !== "" && h !== "#";
+  page.classList.toggle("detail", detail);
+  page.classList.toggle("liste-seule", !detail);
+  $(".retour-mobile").hidden = h === "#reglages";  // les Réglages ont leur propre retour
+  $("#vue").replaceChildren(vue.noeud);
+  dessinerCote();
+  if (detail) $("#contenu").focus({ preventScroll: true });
+  if (!h.startsWith("#reunion/")) scrollTo(0, 0);
+}
+addEventListener("hashchange", router);
+document.addEventListener("keydown", (e) => vue?.clavier?.(e));
+
+(async () => {
+  await chargerConfig();
+  await rafraichir();
+  if (!etat) { passerHorsLigne(true); }
+  // Fenêtre rouverte pendant un enregistrement : écran Enregistrement, bon chronomètre (EN-13).
+  if (etat?.enregistrement && etat.accueil_fini && !location.hash) location.hash = "#enreg";
+  boucle();
+})();
+</script>
+</body>
+</html>

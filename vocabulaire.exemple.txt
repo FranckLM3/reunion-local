@@ -1,0 +1,5 @@
+# Termes passés à Whisper pour qu'il les écrive correctement : noms propres, sigles, produits. Un par ligne.
+# Modifiable dans l'interface (Configuration > Vocabulaire). Le fichier vocabulaire.txt n'est pas suivi par git.
+# Exemple :
+# Bertrand Dupont
+# BSPCE
