@@ -308,3 +308,16 @@ if __name__ == "__main__":
         if nom.startswith("test_"):
             f()
     print("ok")
+
+
+def test_attribuer_garde_les_mots_courts_et_coupes_a_la_meme_personne():
+    import transcribe
+    mots = [(0.0, 0.4, " Ouais"), (0.4, 0.8, " t'as"), (0.8, 1.2, " accès."), (1.2, 1.4, " C"),
+            (1.4, 1.6, "'est"), (1.6, 2.0, " public,"), (2.0, 2.4, " je"), (2.4, 2.8, " les"),
+            (2.8, 3.2, " ai"), (3.2, 3.6, " mis"), (3.6, 4.4, " là.")]
+    tours = [(0.0, 1.2, "A"), (1.2, 1.4, "B"), (1.4, 1.6, "A"), (1.6, 3.2, "B"), (3.2, 3.6, "A"), (3.6, 4.4, "B")]
+    segs = [{"debut": 0.0, "fin": 4.4, "mots": [{"debut": d, "fin": f, "mot": m} for d, f, m in mots]}]
+    sortie = transcribe.attribuer(segs, tours, {}, "micro")
+    # « 'est » suit « C » sans espace : même mot ; « mis » (un mot, 0,4 s) reste à la phrase en cours.
+    assert [o["texte"] for o in sortie] == ["Ouais t'as accès.", "C'est public, je les ai mis là."]
+    assert sortie[0]["loc"] != sortie[1]["loc"]

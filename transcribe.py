@@ -413,24 +413,39 @@ def locuteur_de(debut: float, fin: float, tours) -> str | None:
     return meilleur
 
 
+def lisser(morceaux: list[dict]) -> list[dict]:
+    """Un mot seul de moins d'une seconde, isolé par la séparation au milieu d'une phrase, reste à la
+    personne qui parle juste avant (juste après en début de phrase) : la séparation se trompe surtout là."""
+    court = lambda m: m["fin"] - m["debut"] < 1.0 and len(m["texte"].split()) <= 1
+    if len(morceaux) > 1 and court(morceaux[0]):
+        morceaux = [{**morceaux[1], "debut": morceaux[0]["debut"],
+                     "texte": morceaux[0]["texte"] + morceaux[1]["texte"]}] + morceaux[2:]
+    sortie: list[dict] = []
+    for m in morceaux:
+        if sortie and (sortie[-1]["loc"] == m["loc"] or court(m)):
+            sortie[-1]["texte"] += m["texte"]
+            sortie[-1]["fin"] = m["fin"]
+        else:
+            sortie.append(m)
+    return sortie
+
+
 def attribuer(segs: list[dict], tours, noms: dict, piste: str) -> list[dict]:
     """Découpe les segments Whisper mot par mot selon les tours de parole pyannote."""
     sortie: list[dict] = []
     for s in segs:
-        courant = None
+        morceaux: list[dict] = []
         for w in s["mots"]:
             lbl = locuteur_de(w["debut"], w["fin"], tours)
             # Libellé provisoire : les numéros définitifs suivent l'ordre de parole sur toute la réunion (numeroter).
             nom = noms.setdefault((piste, lbl), f"?{len(noms) + 1}") if lbl else "Inconnu"
-            if courant and courant["loc"] == nom:
-                courant["texte"] += w["mot"]
-                courant["fin"] = w["fin"]
+            # Un mot que Whisper coupe en deux (« C » puis « 'est ») reste à la même personne.
+            if morceaux and (morceaux[-1]["loc"] == nom or not w["mot"][:1].isspace()):
+                morceaux[-1]["texte"] += w["mot"]
+                morceaux[-1]["fin"] = w["fin"]
             else:
-                if courant:
-                    sortie.append(courant)
-                courant = {"debut": w["debut"], "fin": w["fin"], "loc": nom, "texte": w["mot"]}
-        if courant:
-            sortie.append(courant)
+                morceaux.append({"debut": w["debut"], "fin": w["fin"], "loc": nom, "texte": w["mot"]})
+        sortie += lisser(morceaux)
     for o in sortie:
         o["texte"] = o["texte"].strip()
     return [o for o in sortie if o["texte"]]
