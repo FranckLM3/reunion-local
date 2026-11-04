@@ -1,8 +1,11 @@
 """Capture hors Mac, sans carte son : périphériques simulés. python3 test_capture.py"""
 
 import json
+import subprocess
+import sys
 import tempfile
 import threading
+import types
 from pathlib import Path
 
 import numpy as np
@@ -107,6 +110,66 @@ def test_peripherique_absent():
         assert "Aucun micro" in str(e)
     else:
         raise AssertionError("pas d'erreur sans micro")
+
+
+def test_attente_de_l_arret_ne_bloque_pas_le_chargement():
+    """Sous Windows, une lecture bloquante de l'entrée standard figeait le chargement de numpy : la capture ne
+    démarrait qu'à l'arrêt demandé. Ici, numpy doit se charger alors que l'entrée reste ouverte."""
+    code = ("import threading, capture\n"
+            "arret = threading.Event()\n"
+            "threading.Thread(target=capture.attendre_fin_entree, args=(arret,), daemon=True).start()\n"
+            "threading.Event().wait(0.5)\n"
+            "import numpy\n"
+            "print('charge', flush=True)\n"
+            "assert arret.wait(20)\n"
+            "print('arrete', flush=True)\n")
+    p = subprocess.Popen([sys.executable, "-c", code], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                         cwd=Path(__file__).parent)
+    minuterie = threading.Timer(20, p.kill)  # « charge » jamais écrit : le test échoue au lieu de rester bloqué
+    minuterie.start()
+    try:
+        assert p.stdout.readline().strip() == "charge"  # entrée encore ouverte
+        minuterie.cancel()
+        p.stdin.close()
+        assert p.stdout.readline().strip() == "arrete"
+        assert p.wait(20) == 0
+    finally:
+        minuterie.cancel()
+        p.kill()
+        p.stdout.close()
+
+
+def test_micro_au_format_simple():
+    """Micro Intel Smart Sound : Windows annonce un flottant simple, refusé par une assertion de soundcard 0.4.6."""
+    if sys.platform != "win32":
+        return
+    from soundcard import mediafoundation as mf
+
+    capture.accepter_format_simple(mf)
+    ouvert = {}
+
+    def get_mix_format(_client, pp):
+        # Libéré par l'appelant, comme le vrai GetMixFormat. Réseau de micros : 4 canaux pour l'appareil, 2 ici.
+        pp[0] = mf._ffi.cast("WAVEFORMATEXTENSIBLE*", mf._ole32.CoTaskMemAlloc(mf._ffi.sizeof("WAVEFORMATEXTENSIBLE")))
+        pp[0][0].Format.wFormatTag = 3
+        pp[0][0].Format.nChannels = 2
+        pp[0][0].Format.cbSize = 0
+        return 0
+
+    def initialize(_client, partage, drapeaux, duree, _periode, f, _session):
+        ouvert.update(tag=f.Format.wFormatTag, canaux=f.Format.nChannels, taux=f.Format.nSamplesPerSec,
+                      bloc=f.Format.nBlockAlign, bits=f.Format.wBitsPerSample, taille=f.Format.cbSize,
+                      partage=partage, drapeaux=drapeaux, duree=duree)
+        return 0
+
+    vtbl = types.SimpleNamespace(GetMixFormat=get_mix_format, Initialize=initialize)
+    client = mf._AudioClient([[types.SimpleNamespace(lpVtbl=vtbl)]], 48000, 4, 24000, False)
+    assert client.samplerate == 48000 and client.channelmap == [0, 1]
+    assert (ouvert["tag"], ouvert["canaux"], ouvert["taux"], ouvert["bloc"], ouvert["bits"], ouvert["taille"]) \
+        == (3, 2, 48000, 8, 32, 0)
+    assert ouvert["partage"] == mf._ole32.AUDCLNT_SHAREMODE_SHARED
+    assert ouvert["drapeaux"] & 0x80000000 and not ouvert["drapeaux"] & 0x00020000  # conversion, pas de boucle
+    assert ouvert["duree"] == 5_000_000  # 0,5 s
 
 
 if __name__ == "__main__":
