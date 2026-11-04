@@ -69,13 +69,15 @@ def test_choix_du_moteur():
 
 def test_faster_whisper_simule_et_repli_processeur():
     appels = []
+    son = object()
 
     class Modele:
         def __init__(self, repo, device, compute_type):
             self.device = device
             appels.append((repo, device, compute_type))
 
-        def transcribe(self, chemin, **o):
+        def transcribe(self, audio, **o):
+            assert audio is son  # jamais un chemin : faster-whisper le lirait avec PyAV, incompatible depuis la 19
             assert o["language"] == "fr" and o["word_timestamps"] and o["log_prob_threshold"] == -1.0
             if self.device == "cuda":  # l'erreur CUDA ne sort qu'à la lecture du premier segment
                 def casse():
@@ -94,7 +96,8 @@ def test_faster_whisper_simule_et_repli_processeur():
     sys.modules.update(faux)
     transcribe.modele_faster.cache_clear()
     try:
-        segs = transcribe.segments_faster(Path("x.wav"), "", "Systran/faster-whisper-small", "fr")
+        with mock.patch.object(transcribe.separation, "lire_16k", lambda wav: son):
+            segs = transcribe.segments_faster(Path("x.wav"), "", "Systran/faster-whisper-small", "fr")
     finally:
         for k, v in avant.items():
             if v is None:
