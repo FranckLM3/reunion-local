@@ -88,6 +88,55 @@ def _trouver(ident: str, chercher, defaut, quoi: str):
     return defaut()
 
 
+def charger_soundcard():
+    """soundcard, qui accepte aussi les micros annonçant un format simple (voir accepter_format_simple)."""
+    import soundcard as sc
+
+    accepter_format_simple(sys.modules.get("soundcard.mediafoundation"))
+    return sc
+
+
+def accepter_format_simple(mf) -> None:
+    """soundcard 0.4.6 exige que Windows annonce le format WAVEFORMATEXTENSIBLE et refuse les autres par une
+    assertion sans message. Or certains micros (Intel Smart Sound) annoncent un simple flottant 32 bits. Dans ce
+    cas, on demande nous-mêmes du flottant 32 bits : Windows convertit au besoin (drapeau AUTOCONVERTPCM). Le nombre
+    de canaux vient du format de mixage : le réseau de micros en annonce 4 pour l'appareil, mais 2 pour ce format,
+    et Windows refuse d'ouvrir le flux avec 4 (E_INVALIDARG)."""
+    if mf is None or hasattr(mf._AudioClient, "format_simple"):  # pas sous Windows, ou déjà fait
+        return
+    origine = mf._AudioClient.__init__
+
+    def init(self, ptr, samplerate, channels, blocksize, isloopback, exclusive_mode=False):
+        try:
+            return origine(self, ptr, samplerate, channels, blocksize, isloopback, exclusive_mode)
+        except AssertionError:  # levée avant toute ouverture du flux : on peut reprendre à zéro
+            pass
+        self._ptr = ptr
+        mixage = mf._ffi.new("WAVEFORMATEXTENSIBLE**")
+        mf._com.check_error(ptr[0][0].lpVtbl.GetMixFormat(ptr[0], mixage))
+        channels = mixage[0][0].Format.nChannels
+        mf._ole32.CoTaskMemFree(mixage[0])
+        self.channelmap = list(range(channels))
+        f = mf._ffi.new("WAVEFORMATEXTENSIBLE*")
+        f.Format.wFormatTag = 3  # WAVE_FORMAT_IEEE_FLOAT
+        f.Format.nChannels = channels
+        f.Format.nSamplesPerSec = int(samplerate)
+        f.Format.nAvgBytesPerSec = int(samplerate) * channels * 4
+        f.Format.nBlockAlign = channels * 4
+        f.Format.wBitsPerSample = 32
+        f.Format.cbSize = 0
+        # Mêmes drapeaux que soundcard : rééchantillonnage, conversion, sans mémoriser le réglage.
+        drapeaux = 0x00100000 | 0x80000000 | 0x08000000 | 0x00080000 | (0x00020000 if isloopback else 0)
+        duree = int((blocksize or self.deviceperiod[0] * samplerate) / samplerate * 10_000_000)  # en 100 ns
+        partage = mf._ole32.AUDCLNT_SHAREMODE_EXCLUSIVE if exclusive_mode else mf._ole32.AUDCLNT_SHAREMODE_SHARED
+        mf._com.check_error(ptr[0][0].lpVtbl.Initialize(ptr[0], partage, drapeaux, duree, 0, f, mf._ffi.NULL))
+        self.samplerate = samplerate
+        self._idle_start_time = None
+
+    mf._AudioClient.__init__ = init
+    mf._AudioClient.format_simple = True
+
+
 def micro_de(sc, ident: str):
     try:
         return _trouver(ident, sc.get_microphone, sc.default_microphone, "Le micro choisi")
@@ -137,7 +186,7 @@ def capturer(dossier: Path, sc, arret: threading.Event, r: dict | None = None) -
                             journal(f"[{cle}] capture reprise ({source.name}).")
                             coupe, attente = False, ATTENTES[0]
             except Exception as e:
-                journal(f"[{cle}] flux interrompu ({e}) : nouvel essai dans {attente} s.")
+                journal(f"[{cle}] flux interrompu ({str(e) or repr(e)}) : nouvel essai dans {attente} s.")
                 source, coupe = None, True  # le périphérique est recherché à nouveau (celui du système s'il a disparu)
                 arret.wait(attente)
                 attente = next((a for a in ATTENTES if a > attente), ATTENTES[-1])
@@ -165,7 +214,7 @@ def capturer(dossier: Path, sc, arret: threading.Event, r: dict | None = None) -
 
 def peripheriques() -> dict:
     """Micros et sorties détectés, pour l'écran Configuration."""
-    import soundcard as sc
+    sc = charger_soundcard()
 
     return {
         "micros": [{"id": m.id, "nom": m.name} for m in sc.all_microphones()],
@@ -178,8 +227,8 @@ def peripheriques() -> dict:
 def niveau(quoi: str, ident: str, secondes: float = 1.0) -> float:
     """Niveau efficace (dBFS) capté pendant `secondes` sur le micro ou la sortie choisis."""
     import numpy as np
-    import soundcard as sc
 
+    sc = charger_soundcard()
     source = micro_de(sc, ident) if quoi == "micro" else sortie_de(sc, ident)
     with source.recorder(samplerate=TAUX, blocksize=TAMPON) as rec:
         x = rec.record(numframes=int(TAUX * secondes))
@@ -196,6 +245,29 @@ def garder_eveille() -> None:
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001 | 0x00000002)
 
 
+def attendre_fin_entree(arret: threading.Event) -> None:
+    """Arrête la capture quand serveur.py ferme l'entrée standard. Sous Windows, jamais de lecture bloquante sur ce
+    tube : tant qu'elle est en attente, charger une DLL (numpy, pilote audio) peut bloquer aussi, et la capture ne
+    démarrait qu'à l'arrêt demandé (deux pistes vides, « enregistrement bloqué »)."""
+    if sys.platform == "win32":
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.GetFileType.argtypes = [wintypes.HANDLE]
+        k.PeekNamedPipe.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.c_void_p,
+                                    ctypes.c_void_p, ctypes.c_void_p]
+        tube = msvcrt.get_osfhandle(sys.stdin.fileno())
+        if k.GetFileType(tube) == 3:  # FILE_TYPE_PIPE ; une console ou un fichier se lisent comme ailleurs
+            while not arret.wait(0.2) and k.PeekNamedPipe(tube, None, 0, None, None, None):
+                pass
+            arret.set()
+            return
+    sys.stdin.read()
+    arret.set()
+
+
 def main() -> int:
     # Configuration : serveur.py appelle ces deux commandes dans un processus à part (voir serveur.capture_cli).
     if sys.argv[1:2] in (["--peripheriques"], ["--niveau"]):
@@ -208,7 +280,7 @@ def main() -> int:
                 print("Usage : capture.py --niveau micro|sortie <identifiant>", file=sys.stderr)
                 return 2
         except Exception as e:
-            print(str(e), file=sys.stderr)
+            print(str(e) or repr(e), file=sys.stderr)  # une assertion n'a pas de message
             return 1
         return 0
     if len(sys.argv) != 2:
@@ -217,14 +289,9 @@ def main() -> int:
     dossier = Path(sys.argv[1])
     dossier.mkdir(parents=True, exist_ok=True)
     arret = threading.Event()
-
-    def attendre_fin_entree():
-        sys.stdin.read()  # serveur.py ferme l'entrée standard pour arrêter
-        arret.set()
-
-    threading.Thread(target=attendre_fin_entree, daemon=True).start()
+    threading.Thread(target=attendre_fin_entree, args=(arret,), daemon=True).start()
     try:
-        import soundcard as sc
+        sc = charger_soundcard()
     except Exception as e:
         print(f"Bibliothèque audio absente ou inutilisable ({e}) : relance l'installation.", file=sys.stderr)
         return 1

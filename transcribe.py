@@ -340,13 +340,16 @@ def segments_faster(wav: Path, prompt: str, repo: str, langue: str | None) -> li
     sinon processeur en int8 (sous Windows, les bibliothèques CUDA manquent souvent)."""
     import ctranslate2
 
+    # Son décodé ici plutôt que passé en chemin : faster-whisper 1.2.1 appelle av.open(metadata_errors=...), argument
+    # supprimé par PyAV 19 (sa dépendance « av>=11 » prend pourtant cette version).
+    audio = separation.lire_16k(wav)
     essais = [("cpu", "int8")]
     if not os.environ.get("REUNION_CPU") and ctranslate2.get_cuda_device_count() > 0:
         essais.insert(0, ("cuda", "float16"))
     for i, (appareil, calcul) in enumerate(essais):
         try:
             segs, info = modele_faster(repo, appareil, calcul).transcribe(
-                str(wav), language=langue, initial_prompt=prompt or None, log_prob_threshold=-1.0,
+                audio, language=langue, initial_prompt=prompt or None, log_prob_threshold=-1.0,
                 vad_filter=False, **OPTIONS_WHISPER)
             duree = getattr(info, "duration", 0) or 0
             sortie = []
