@@ -28,11 +28,15 @@ final class Track {
         guard !ferme, let fd = sb.formatDescription else { return }
         // Format lu dans l'ASBD, pas via AVAudioFormat(cmAudioFormatDescription:) : sous Teams, le micro
         // arrive avec 3 canaux sans disposition et ce format-là fait planter AVAudioPCMBuffer (13/10).
+        // Flottant 32 bits (micro interne) ou entier signé 16 bits (micro Bluetooth mains-libres, ex. earbuds).
         guard let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(fd)?.pointee,
-              asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0, asbd.mBitsPerChannel == 32,
-              asbd.mChannelsPerFrame > 0, asbd.mSampleRate > 0,
+              asbd.mChannelsPerFrame > 0, asbd.mSampleRate > 0 else { return }
+        let estFlottant = asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0
+        guard (estFlottant && asbd.mBitsPerChannel == 32)
+                || (!estFlottant && asbd.mFormatFlags & kAudioFormatFlagIsSignedInteger != 0 && asbd.mBitsPerChannel == 16),
               let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: asbd.mSampleRate,
                                          channels: 1, interleaved: false) else { return }
+        let octets = estFlottant ? 4 : 2
         let ch = Int(asbd.mChannelsPerFrame)
         let pts = sb.presentationTimeStamp.seconds
         let frames = sb.numSamples
@@ -65,23 +69,27 @@ final class Track {
                 }
             }
 
-            // Toujours écrit en mono (moyenne des canaux) : le reste de l'outil lit du float32 mono 48 kHz.
+            // Toujours écrit en mono (moyenne des canaux) : le reste de l'outil lit du float32 mono.
+            func sample(_ p: UnsafeRawPointer, _ i: Int) -> Float {
+                estFlottant ? p.load(fromByteOffset: i * 4, as: Float.self)
+                            : Float(p.load(fromByteOffset: i * 2, as: Int16.self)) / 32768
+            }
             try sb.withAudioBufferList { abl, _ in
                 guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)),
                       let out = buf.floatChannelData?[0] else { return }
                 buf.frameLength = AVAudioFrameCount(frames)
-                let sources = abl.compactMap { $0.mData?.assumingMemoryBound(to: Float.self) }
+                let sources = abl.compactMap { $0.mData.map { UnsafeRawPointer($0) } }
                 guard sources.count == abl.count else { return }
                 if sources.count == 1 {  // entrelacé : ch canaux côte à côte
-                    guard Int(abl[0].mDataByteSize) >= frames * ch * 4 else { return }
+                    guard Int(abl[0].mDataByteSize) >= frames * ch * octets else { return }
                     for i in 0..<frames {
                         var s: Float = 0
-                        for c in 0..<ch { s += sources[0][i * ch + c] }
+                        for c in 0..<ch { s += sample(sources[0], i * ch + c) }
                         out[i] = s / Float(ch)
                     }
                 } else {  // un tampon par canal
-                    guard abl.allSatisfy({ Int($0.mDataByteSize) >= frames * 4 }) else { return }
-                    for i in 0..<frames { out[i] = sources.reduce(0) { $0 + $1[i] } / Float(sources.count) }
+                    guard abl.allSatisfy({ Int($0.mDataByteSize) >= frames * octets }) else { return }
+                    for i in 0..<frames { out[i] = sources.reduce(0) { $0 + sample($1, i) } / Float(sources.count) }
                 }
                 try file.write(from: buf)
             }
