@@ -39,6 +39,31 @@ sys.exit(1)
     assert "fin_estimee" not in t  # avant 10 %, l'estimation de départ reste (TR-03)
 
 
+def test_avancement_et_estimation_par_etape(tmp_path):
+    """Une barre et une estimation par étape : durée prévue d'après les mesures de chaque étape, vitesse observée
+    pour l'étape en cours, mesures gardées à la fin."""
+    script = tmp_path / "faux.py"
+    script.write_text('print("@etape 1"); print("@etape 2"); print("@piste 0.05 0.75"); print("  50%|")',
+                      encoding="utf-8")
+    r = {**reglages.DEFAUTS, "vitesses": {"m": [1.0]}, "vitesses_etapes": {"3": [0.5]}}
+    prevu = serveur.estimations_etapes(r, "m", 600, {})
+    assert prevu[3] == 300 and abs(prevu[2] - 0.70 * 600) < 1  # étape 3 mesurée, étape 2 répartie depuis k
+    assert serveur.estimations_etapes(r, "m", 600, {"separation_seule": True})[2] == 10
+    travail = {"debut": time.time(), "fraction": 0.0, "en_cours": True, "prevu": prevu, "chrono": {}}
+    serveur.executer(travail, [str(script)])
+    travail["en_cours"] = True
+    c = travail["chrono"]["2"]
+    # Reprise : l'étape repart à 50 % d'un coup. Sans vitesse mesurée depuis, la durée prévue du reste (420 s × 0,5).
+    assert abs(serveur.etapes_de(travail)[1]["restant_s"] - 210) <= 2
+    c["f0"], c["t0"], c["debut"] = 0.05, c["t0"] - 100, c["debut"] - 100  # 50 % de l'étape en 100 s : encore 100 s
+    e = serveur.etapes_de(travail)
+    assert [x["statut"] for x in e] == ["fini", "en_cours", "attente", "attente"]
+    assert e[1]["fraction"] == 0.5 and abs(e[1]["restant_s"] - 100) <= 2 and e[2]["restant_s"] == 300
+    with mock.patch.object(reglages, "FICHIER", tmp_path / "reglages.json"):
+        serveur.noter_vitesses_etapes("m", {"2": {"debut": 0, "fin": 300}, "3": {"debut": 0, "fin": 1}}, 600, {})
+        assert reglages.lire()["vitesses_etapes"] == {"2:m": [0.5]}  # séparation de 1 s : pas mesurée
+
+
 def test_transcription_lancee_echec_et_vitesse():
     with serveur_local() as (t, get, post, port):
         d = serveur.BASE / "261103-1305-point"
@@ -195,7 +220,8 @@ def test_mise_a_jour():
 
 
 def test_effacer_ne_touche_que_nos_fichiers(tmp_path):
-    with serveur_local() as (t, get, post, port), mock.patch.dict("os.environ", {"HF_HOME": str(tmp_path / "hf")}):
+    with serveur_local() as (t, get, post, port), mock.patch.dict("os.environ", {"HF_HOME": str(tmp_path / "hf"),
+                                                                         "REUNION_MODELES_DIAR": str(tmp_path / "diar")}):
         reunion = serveur.BASE / "261103-1305-point"
         reunion.mkdir()
         piste(reunion / "micro.wav", 0.1)

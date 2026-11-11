@@ -49,6 +49,9 @@ DEFAUTS = {
     "etat_son": "",              # même chose pour le son de l'ordinateur
     "direct": None,              # brouillon pendant l'enregistrement ; None : selon la machine
     "vitesses": {},              # modèle -> 5 dernières mesures de (temps de calcul / durée de l'audio)
+    "vitesses_etapes": {},       # étape (« 2:modèle » pour Whisper) -> 5 dernières mesures, même rapport
+    "ressources": 100,           # part des cœurs laissée à la transcription : 10 à 100, par pas de 10 (ressources.py)
+    "priorite_basse": False,     # transcription en priorité basse : l'ordinateur reste réactif
     "telecharges": [],           # dépôts téléchargés par Réunion elle-même (les seuls qu'elle efface)
 }
 

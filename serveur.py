@@ -33,7 +33,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote
 
 import agenda
+import pause
 import reglages
+import ressources
 import relecture
 import separation
 import transcribe
@@ -107,6 +109,7 @@ CAUSES_TRANSCRIPTION = {
     "fichiers_incomplets": "les fichiers de transcription sont incomplets",
     "memoire": "l'ordinateur a manqué de mémoire (essayez la qualité Rapide)",
     "arret": "l'ordinateur s'est arrêté pendant le calcul", "disque_plein": "le disque est plein",
+    "texte_absent": "le texte de la transcription précédente n'a pas été gardé : refaites la transcription complète",
     "inconnue": "une erreur inattendue s'est produite",
 }
 CAUSES = {
@@ -347,6 +350,12 @@ def options_cli(o: dict) -> list[str]:
         args.append("--sans-locuteurs")
     if o.get("chuchote"):
         args.append("--chuchote")
+    # « Pistes à écouter » : les deux pistes sont toujours enregistrées, le choix ne vaut que pour la transcription
+    # (un mauvais choix se rattrape avec « Refaire »). « deux » ou absent : les deux pistes.
+    if o.get("pistes") in ("micro", "systeme"):
+        args += ["--pistes", o["pistes"]]
+    if o.get("separation_seule") is True:  # texte gardé, seule la séparation des voix est refaite
+        args.append("--separation-seule")
     if o.get("langue") in LANGUES:
         args += ["--langue", o["langue"]]
     return args
@@ -422,6 +431,108 @@ def avancer(travail: dict, fraction: float) -> None:
         travail["lent"] = ecoule / travail["fraction"] > 1.5 * max(travail.get("estimation_s") or 0, 1)
 
 
+# Étapes de transcribe.py (« @etape N ») et leur part de l'avancement global.
+_P, _T, _S = transcribe.PART_PREPARATION, transcribe.PART_TRANSCRIPTION, transcribe.PART_SEPARATION
+BORNES_ETAPES = {1: (0.0, _P), 2: (_P, _P + _T), 3: (_P + _T, _P + _T + _S), 4: (_P + _T + _S, 1.0)}
+
+
+def cle_vitesse(etape: int, modele: str) -> str:
+    return f"2:{modele}" if etape == 2 else str(etape)  # seule la transcription dépend du modèle Whisper
+
+
+def estimations_etapes(r: dict, modele: str, duree: float, options: dict) -> dict[int, float]:
+    """Durée prévue de chaque étape (s) : moyenne des mesures de cet ordinateur pour l'étape, sinon l'estimation
+    globale (vitesse_k) répartie selon la part de l'étape dans l'avancement."""
+    k, _ = transcribe.vitesse_k(r, modele)
+    mesures = r.get("vitesses_etapes") or {}
+    prevu = {}
+    for n, (a, b) in BORNES_ETAPES.items():
+        m = mesures.get(cle_vitesse(n, modele)) or []
+        prevu[n] = (sum(m) / len(m) if m else k * (b - a)) * (duree or 0)
+    if options.get("separation_seule"):  # texte gardé : Whisper n'est pas relancé
+        prevu[2] = 10.0
+    return prevu
+
+
+def noter_vitesses_etapes(modele: str, chrono: dict, duree: float, options: dict) -> None:
+    """Garde les 5 dernières mesures de chaque étape (temps / durée de la réunion)."""
+    r = reglages.lire()
+    vitesses = dict(r.get("vitesses_etapes") or {})
+    for n, c in (chrono or {}).items():
+        n = int(n)
+        if "fin" not in c or n not in BORNES_ETAPES or (n == 2 and options.get("separation_seule")):
+            continue
+        temps = c["fin"] - c["debut"]
+        if n == 3 and temps < 2:  # pas de séparation cette fois : la mesure fausserait les suivantes
+            continue
+        cle = cle_vitesse(n, modele)
+        vitesses[cle] = ((vitesses.get(cle) or []) + [round(temps / duree, 4)])[-5:]
+    reglages.ecrire({**r, "vitesses_etapes": vitesses})
+
+
+def noter_depart(travail: dict) -> None:
+    """Premier avancement de l'étape en cours : point de départ de sa vitesse. Après une reprise, l'étape repart
+    à 40 % d'un coup ; mesurer depuis là évite de croire ces 40 % faits en quelques secondes."""
+    c = (travail.get("chrono") or {}).get(str(travail.get("etape")))
+    if c is not None and "f0" not in c:
+        c["f0"], c["t0"] = travail.get("fraction", 0.0), time.time()
+
+
+def etapes_de(travail: dict) -> list[dict]:
+    """Avancement et temps restant de chaque étape, pour la page. L'étape en cours suit sa vitesse observée dès
+    3 % ; avant, et pour les étapes à venir, la durée prévue."""
+    maintenant = travail.get("pause") or time.time()  # en pause, le temps restant ne bouge plus
+    chrono, prevu = travail.get("chrono") or {}, travail.get("prevu") or {}
+    cour, fraction = travail.get("etape", 1), travail.get("fraction", 0.0)
+    sortie = []
+    for n, (a, b) in BORNES_ETAPES.items():
+        c = chrono.get(str(n)) or {}
+        e = {"numero": n, "prevu_s": round(prevu.get(n, 0))}
+        if n < cour or not travail.get("en_cours"):
+            e |= {"statut": "fini", "fraction": 1.0, "restant_s": 0,
+                  "duree_s": round(c["fin"] - c["debut"]) if "fin" in c else None}
+        elif n == cour:
+            fe = min(max((fraction - a) / (b - a), 0.0), 1.0)
+            ecoule = maintenant - c.get("debut", travail.get("debut", maintenant))
+            # Vitesse mesurée depuis le premier avancement de l'étape (f0, t0), pas depuis son début : une reprise
+            # ne compte pas ce qui était fait avant l'arrêt.
+            f0 = min(max((c.get("f0", a) - a) / (b - a), 0.0), 1.0)
+            fait, duree_mesure = fe - f0, maintenant - c.get("t0", maintenant)
+            if fait >= 0.03 and duree_mesure >= 20:
+                restant = duree_mesure * (1 - fe) / fait
+            else:  # pas encore de vitesse : la durée prévue, pour ce qui reste de l'étape
+                restant = min(prevu.get(n, 0) * (1 - fe), max(prevu.get(n, 0) - ecoule, 0))
+            e |= {"statut": "en_cours", "fraction": round(fe, 3), "ecoule_s": round(ecoule), "restant_s": round(restant)}
+        else:
+            e |= {"statut": "attente", "fraction": 0.0, "restant_s": round(prevu.get(n, 0))}
+        sortie.append(e)
+    return sortie
+
+
+def mettre_en_pause(o: dict) -> dict:
+    """Pause (o["pause"] vrai) ou reprise d'un traitement : son processus est gelé sur place, rien n'est perdu.
+    À la reprise, les chronos sont décalés du temps de pause pour que vitesses et estimations l'ignorent."""
+    nom, oui = str(o.get("reunion") or ""), o.get("pause") is True
+    with verrou:
+        t = travaux.get(nom)
+        if not t or not t.get("en_cours") or not t.get("pid"):
+            return erreur("invalide")
+        if oui and not t.get("pause"):
+            pause.geler(t["pid"])
+            t["pause"] = time.time()
+        elif not oui and t.get("pause"):
+            pause.geler(t["pid"], False)
+            ecart = time.time() - t.pop("pause")
+            for cle in ("debut", "fin_estimee"):
+                if t.get(cle):
+                    t[cle] += ecart
+            for c in (t.get("chrono") or {}).values():
+                for cle in ("debut", "t0"):
+                    if cle in c and "fin" not in c:
+                        c[cle] += ecart
+    return {"ok": True}
+
+
 def executer(travail: dict, args: list[str], journal: Path | None = None) -> int:
     """Lance un script Python de l'environnement et lit son avancement (lignes « @... » et barres « 45%| »).
     La sortie lisible part dans le journal de la réunion."""
@@ -430,6 +541,7 @@ def executer(travail: dict, args: list[str], journal: Path | None = None) -> int
                             encoding="utf-8", errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                             **SANS_FENETRE)
     enfants.add(proc)
+    travail["pid"] = proc.pid  # pour la pause
     j = None
     if journal:
         try:
@@ -444,17 +556,23 @@ def executer(travail: dict, args: list[str], journal: Path | None = None) -> int
             if m := re.match(r"(\d+)%\|", ligne):  # barre de la transcription d'une piste
                 a, b = travail.get("piste", (0, 0))
                 avancer(travail, a + (b - a) * int(m[1]) / 100)
+                noter_depart(travail)
                 continue
             if ligne.startswith("@"):
                 cle, _, valeur = ligne[1:].partition(" ")
                 try:
                     if cle == "etape":
                         travail["etape"] = int(valeur)
+                        chrono, maintenant = travail.setdefault("chrono", {}), time.time()
+                        for c in chrono.values():  # l'étape précédente se termine
+                            c.setdefault("fin", maintenant)
+                        chrono.setdefault(valeur, {"debut": maintenant})
                     elif cle == "piste":
                         travail["piste"] = tuple(map(float, valeur.split()))
                         avancer(travail, travail["piste"][0])
                     elif cle == "avance":
                         avancer(travail, float(valeur))
+                        noter_depart(travail)
                     elif cle == "repli":
                         travail["repli"] = True
                     elif cle in ("echec", "k"):
@@ -470,6 +588,9 @@ def executer(travail: dict, args: list[str], journal: Path | None = None) -> int
         if j:
             j.close()
     travail["code"] = proc.wait()
+    travail.pop("pause", None)
+    for c in (travail.get("chrono") or {}).values():
+        c.setdefault("fin", time.time())
     enfants.discard(proc)
     return travail["code"]
 
@@ -511,9 +632,12 @@ def lancer_transcription(d: Path, options: dict, reprise: bool = False) -> dict 
     k, mesure = transcribe.vitesse_k(r, modele)
     duree = duree_audio(d) or 0
     maintenant = time.time()
-    travail = {"en_cours": True, "etape": 1, "fraction": 0.0, "debut": maintenant, "estimation_s": k * duree,
-               "fin_estimee": maintenant + k * duree, "fin_initiale": maintenant + k * duree, "approx": not mesure,
-               "repli": False, "lent": False, "reprise": reprise, "code": None, "echec": None, "ligne": ""}
+    prevu = estimations_etapes(r, modele, duree, options)  # sans mesure par étape : k * duree réparti, même total
+    total = sum(prevu.values())
+    travail = {"en_cours": True, "etape": 1, "fraction": 0.0, "debut": maintenant, "estimation_s": total,
+               "fin_estimee": maintenant + total, "fin_initiale": maintenant + total, "approx": not mesure,
+               "repli": False, "lent": False, "reprise": reprise, "code": None, "echec": None, "ligne": "",
+               "prevu": prevu, "chrono": {}}
 
     def tourner(travail):
         (d / "options.json").write_text(json.dumps(options, ensure_ascii=False), encoding="utf-8")
@@ -535,7 +659,9 @@ def lancer_transcription(d: Path, options: dict, reprise: bool = False) -> dict 
         else:
             (d / "echec.txt").unlink(missing_ok=True)
             if duree >= 60 and not reprise:
-                noter_vitesse(modele, (time.time() - travail["debut"]) / duree)
+                if not options.get("separation_seule"):  # sans Whisper, le total ne dit rien de sa vitesse
+                    noter_vitesse(modele, (time.time() - travail["debut"]) / duree)
+                noter_vitesses_etapes(modele, travail.get("chrono"), duree, options)
             alerter(f"Votre réunion est prête : {titre}")
         (d / "transcription.en-cours").unlink(missing_ok=True)
 
@@ -910,6 +1036,7 @@ def retranscrire(d: Path, o: dict) -> dict | None:
     sauvees = lire_json(d / "options.json") or {}
     if "personnes" in o or "nb" in o:  # un nouveau nombre remplace l'ancien
         sauvees = {k: v for k, v in sauvees.items() if k not in ("nb", "personnes", "max")}
+    sauvees.pop("separation_seule", None)  # vaut pour une seule fois : un « Refaire » complet ensuite relance Whisper
     for nom in ("transcription.json", "locuteurs.json"):  # le texte remplacé reste récupérable
         if (d / nom).exists():
             shutil.copyfile(d / nom, d / nom.replace(".json", ".avant-refaire.json"))
@@ -1115,6 +1242,8 @@ def detail(d: Path) -> dict:
             "echec": echec and erreur("transcription", d, cause=CAUSES_TRANSCRIPTION[echec])["erreur"],
             "estimation_s": round(k * (duree or 0)), "estimation_approx": not mesure,
             "separation_disponible": separation_disponible(),
+            "pistes": (lire_json(d / "options.json") or {}).get("pistes") or "deux",
+            "texte_garde": (d / transcribe.TEXTE_BRUT).exists(),
             "partiel": travaux.get(d.name, {}).get("en_cours") and lire_json(d / "transcription.partielle.json")}
 
 
@@ -1446,7 +1575,9 @@ def etat() -> dict:
         t = test_son and {k: v for k, v in test_son.items() if k != "fin"}
         return {
             "enregistrement": enr,
-            "travaux": {k: v for k, v in travaux.items() if v["en_cours"] or v["code"]},
+            "travaux": {k: {**v, "etapes": (e := etapes_de(v)),
+                            "fin_etapes": (v.get("pause") or time.time()) + sum(x["restant_s"] for x in e)}
+                        for k, v in travaux.items() if v["en_cours"] or v["code"]},
             "preparation": etat_preparation(),
             "fichiers_prets": fichiers_prets(r),
             "test_son": t,
@@ -1540,6 +1671,7 @@ def configuration() -> dict:
         "dossier": str(BASE),
         "dossier_impose": bool(os.environ.get("REUNION_DIR")),
         "plateforme": sys.platform,
+        "coeurs": ressources.coeurs_total(),
         "prenom": transcribe.PRENOM,
         "moi": moi(),
         "machine": transcribe.machine(),
@@ -1593,9 +1725,13 @@ def enregistrer_configuration(o: dict) -> dict:
         r["langue"] = o["langue"]
     if o.get("accueil_fini") is False and not reglages.FICHIER.exists():
         r["langue"] = reglages.langue_systeme()  # premier lancement : la langue du système, une fois (Q6)
-    for cle in ("locuteurs", "accueil_fini"):
+    for cle in ("locuteurs", "accueil_fini", "priorite_basse"):
         if cle in o:
             r[cle] = bool(o[cle])
+    if "ressources" in o:  # appliqué en cours de transcription par transcribe.py (ressources.surveiller)
+        if o["ressources"] not in ressources.PARTS or isinstance(o["ressources"], bool):
+            return erreur("invalide")
+        r["ressources"] = o["ressources"]
     if "direct" in o:
         r["direct"] = None if o["direct"] is None else bool(o["direct"])
     if "accueil_etape" in o:
@@ -1902,7 +2038,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if self.path == "/api/agenda":
             return self.json(erreur("agenda") if agenda.enregistrer_url(str(o.get("url") or "")) else {"ok": True})
         routes = {
-            "/api/demarrer": demarrer, "/api/arreter": lambda o: arreter(), "/api/apercu": lambda o: apercu(),
+            "/api/demarrer": demarrer, "/api/pause": mettre_en_pause, "/api/arreter": lambda o: arreter(), "/api/apercu": lambda o: apercu(),
             "/api/relancer": lambda o: relancer(), "/api/direct": lambda o: activer_direct(),
             "/api/renommer": lambda o: modifier(o, _renommer),
             "/api/voix/accepter": lambda o: modifier(o, _accepter),
@@ -1938,8 +2074,12 @@ class Gestionnaire(BaseHTTPRequestHandler):
             d = dossier_de(o.get("reunion", ""))
             if not d:
                 return self.json(erreur("reunion_introuvable"), 404)
-            o = {k: v for k, v in o.items() if k in ("personnes", "chuchote", "langue")}
+            o = {k: v for k, v in o.items() if k in ("personnes", "chuchote", "langue", "pistes", "separation_seule")}
+            if o.get("separation_seule") is not True:
+                o.pop("separation_seule", None)
             if "personnes" in o and (not isinstance(o["personnes"], int) or not 1 <= o["personnes"] <= 30):
+                return self.json(erreur("invalide", d))
+            if "pistes" in o and o["pistes"] not in ("deux", "micro", "systeme"):
                 return self.json(erreur("invalide", d))
             return self.json(retranscrire(d, o) or {"ok": True})
         self.send_error(404)
@@ -2019,6 +2159,9 @@ def adresse_page(jeton: str | None, ancre: str = "") -> str:
 
 def garder_enregistrement() -> None:
     """À la fermeture : l'enregistreur finalise ses fichiers ; la transcription se lance depuis la page."""
+    for t in list(travaux.values()):  # un processus gelé ne recevrait pas l'ordre de s'arrêter (SIGTERM)
+        if t.get("pause") and t.get("pid"):
+            pause.geler(t["pid"], False)
     for p in list(enfants):  # repris au lancement suivant (témoin transcription.en-cours, TR-09)
         p.terminate()
     if enregistrement:

@@ -69,7 +69,7 @@ assert "Ïsmaël" in (d / "transcription.md").read_text(encoding="utf-8")
 """
     with tempfile.TemporaryDirectory() as t:
         r = subprocess.run([sys.executable, "-X", "warn_default_encoding", "-W", "error::EncodingWarning",
-                            "-c", script, t], cwd=Path(__file__).parent, env={**os.environ, "HOME": t},
+                            "-c", script, t], cwd=Path(__file__).parent, env={**os.environ, "HOME": t, "USERPROFILE": t},  # Windows : Path.home() lit USERPROFILE
                            capture_output=True, text=True, encoding="utf-8")
         assert r.returncode == 0, r.stderr
 

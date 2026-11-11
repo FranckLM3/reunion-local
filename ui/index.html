@@ -231,6 +231,7 @@ mark.courant { background: #f5b84a; }
 .etapes .ok { color: var(--succes); }
 .etapes .cours { font-weight: 650; color: var(--ink); }
 .etapes .attente { color: var(--body-soft); }
+.phase { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bord); }
 .rondpt { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--bord-fort); flex: none; }
 .cours .rondpt { border-color: var(--accent); border-top-color: transparent; animation: tourne 1s linear infinite; }
 @keyframes tourne { to { transform: rotate(360deg); } }
@@ -400,6 +401,14 @@ const memoire = {  // préférences d'affichage de ce navigateur seulement
   lire(k, d) { try { const v = localStorage.getItem(`reunion.${k}`); return v === null ? d : JSON.parse(v); } catch { return d; } },
   ecrire(k, v) { try { localStorage.setItem(`reunion.${k}`, JSON.stringify(v)); } catch { /* navigation privée */ } },
 };
+
+// « Pistes à écouter » : les deux pistes sont toujours enregistrées ; le choix décide de ce qui est transcrit.
+const PISTES = { deux: "Micro et son de l'ordinateur (visio)", micro: "Micro seulement (tout le monde dans la pièce)",
+  systeme: "Son de l'ordinateur seulement" };
+function choixPistes(id, valeur, auChangement) {
+  return el("select", { id, onchange: (e) => auChangement?.(e.target.value) },
+    ...Object.entries(PISTES).map(([v, n]) => el("option", { value: v, selected: v === valeur }, n)));
+}
 
 // Heures et durées (spec, section 2) : « 14:30 », « 1 h 05 min », « 12 min », « 40 s ».
 const pad = (n) => String(n).padStart(2, "0");
@@ -630,7 +639,7 @@ function champsNom() {  // « Donner un nom (facultatif) » : le dernier dépli�
 async function demarrer() {
   const b = $("#bouton-enreg");
   b.disabled = true;
-  const r = await api("/api/demarrer", champsNom());
+  const r = await api("/api/demarrer", { ...champsNom(), pistes: memoire.lire("pistes", "deux") });
   b.disabled = false;
   if (r.erreur) {
     erreurDemarrage = r.erreur;
@@ -658,6 +667,8 @@ function heroEnregistrer(n) {
   const now = new Date();
   return el("div", { className: "hero carte" },
     el("button", { className: "btn rec btn-enreg", type: "button", onclick: demarrer }, el("span", { className: "pastille-rec", "aria-hidden": "true" }), el("span", {}, "Enregistrer")),
+    el("label", { for: `h-pistes${n}` }, "Pistes à écouter"),
+    choixPistes(`h-pistes${n}`, memoire.lire("pistes", "deux"), (v) => memoire.ecrire("pistes", v)),
     el("details", { className: "donner" }, el("summary", {}, "Donner un nom (facultatif)"),
       el("label", { for: `h-nom${n}` }, "Nom de la réunion"),
       el("input", { id: `h-nom${n}`, name: "nom", type: "text", autocomplete: "off",
@@ -953,17 +964,51 @@ function vueReunion(nom, q) {
     if (tr.repli) lignes.push(el("p", { className: "note-aide", style: "margin-top:8px" }, `La carte graphique a échoué : calcul sur le processeur, plus lent. Nouvelle heure de fin : ${hhmm(tr.fin_estimee)}.`));  // ER-14
     if (tr.lent) lignes.push(el("p", { className: "note-aide", style: "margin-top:8px" }, "Plus lent que prévu : l'ordinateur est peut-être occupé par d'autres applications."));  // TR-04
     if (tr.approx && tr.fraction < 0.1) lignes.push(el("p", { className: "note-aide", style: "margin-top:8px" }, "Estimation approximative, elle s'affinera."));  // TR-05
-    return [el("div", { className: "carte", style: "margin-top:20px" }, el("h3", {}, "Transcription en cours"),
-      el("p", { className: "fin", style: "margin-top:8px" }, `Prête vers ${hhmm(tr.fin_estimee)} `, el("span", {}, `(encore ${estimation(reste)} environ).`)),
-      el("div", { style: "display:flex;gap:10px;align-items:center;margin-top:12px" },
-        el("progress", { max: 100, value: pct, "aria-label": "Avancement de la transcription" }), el("b", { style: "font-variant-numeric:tabular-nums;white-space:nowrap" }, `${pct} %`)),
+    // Total comme avant (heure de fin, temps restant, pourcentage, barre), puis les mêmes informations pour l'étape
+    // en cours. Le total est la somme des restes de chaque étape (serveur : etapes_de).
+    // En pause, le serveur fige le temps restant : on l'affiche tel quel, sans heure de fin qui glisserait.
+    const enPause = !!tr.pause;
+    const maintenant = Date.now() / 1000;
+    const fin = tr.fin_etapes || tr.fin_estimee;
+    const resteTotal = Math.max(0, fin - maintenant);
+    const ec = tr.etapes?.find((e) => e.statut === "en_cours");
+    const barre = (valeur, label) => el("div", { style: "display:flex;gap:10px;align-items:center;margin-top:8px" },
+      el("progress", { max: 100, value: valeur, "aria-label": label }), el("b", { style: "font-variant-numeric:tabular-nums;white-space:nowrap" }, `${valeur} %`));
+    const phase = ec ? (() => {
+      const pctE = Math.round(ec.fraction * 100), nomE = ETAPES[ec.numero - 1];
+      return el("div", { className: "phase" },
+        el("p", {}, el("b", {}, `Étape en cours : ${nomE}. `), enPause
+          ? el("span", {}, `En pause (encore ${estimation(ec.restant_s)} environ à la reprise).`)
+          : ec.restant_s > 0
+          ? el("span", {}, `Finie vers ${hhmm(maintenant + ec.restant_s)} (encore ${estimation(ec.restant_s)} environ).`)
+          : el("span", {}, "Presque finie.")),
+        barre(pctE, `Avancement de l'étape : ${nomE}`));
+    })() : null;
+    const basculer = async (ev) => {
+      ev.currentTarget.disabled = true;
+      const r = await api("/api/pause", { reunion: nom, pause: !enPause });
+      if (r.erreur) toast(r.erreur.cause);
+      annoncer(enPause ? "Transcription reprise." : "Transcription en pause.");
+      await rafraichir(); await charger(false);
+    };
+    return [el("div", { className: "carte", style: "margin-top:20px" },
+      el("div", { style: "display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap" },
+        el("h3", {}, enPause ? "Transcription en pause" : "Transcription en cours"),
+        bouton(el("span", { style: "display:inline-flex;gap:6px;align-items:center" }, ico(enPause ? "play" : "pause"), enPause ? "Reprendre" : "Pause"),
+          basculer, "btn petit", { "aria-pressed": enPause ? "true" : "false" })),
+      enPause
+        ? el("p", { className: "fin", style: "margin-top:8px" }, `En pause : rien n'est perdu, le calcul reprend où il en était. `, el("span", {}, `(encore ${estimation(resteTotal)} environ après la reprise).`))
+        : el("p", { className: "fin", style: "margin-top:8px" }, `Prête vers ${hhmm(fin)} `, el("span", {}, `(encore ${estimation(resteTotal)} environ).`)),
+      barre(pct, "Avancement de la transcription"),
+      phase,
       el("ol", { className: "etapes" }, ...ETAPES.map((nomE, i) => {
         const etape = i + 1, cl = etape < tr.etape ? "ok" : etape === tr.etape ? "cours" : "attente";
         return el("li", { className: cl }, cl === "ok" ? ico("check") : el("span", { className: "rondpt", "aria-hidden": "true" }), nomE,
           el("span", { className: "sr" }, cl === "ok" ? " (fini)" : cl === "cours" ? " (en cours)" : " (à venir)"));
       })),
       ...lignes,
-      el("p", { className: "note-aide", style: "margin-top:8px" }, "Vous pouvez fermer cette page ou enregistrer une autre réunion."))];
+      el("p", { className: "note-aide", style: "margin-top:8px" }, "Vous pouvez fermer cette page ou enregistrer une autre réunion. ",
+        el("a", { href: "#reglages" }, "Régler la puissance utilisée"), " (modifiable pendant la transcription)."))];
   }
   async function transcrire(o) {
     const r = await api("/api/transcrire", { reunion: nom, ...o });
@@ -974,17 +1019,23 @@ function vueReunion(nom, q) {
     const k = Math.round(data.estimation_s);
     const combien = el("input", { id: "combien", type: "number", min: 1, max: 30, "aria-describedby": "combien-aide" });
     const faibles = el("input", { type: "checkbox" });
+    const pistes = choixPistes("pistes-r", data.pistes || "deux");
     const langue = el("select", { id: "langue-r" }, ...Object.entries(config?.langues || {}).map(([code, n]) =>
       el("option", { value: code, selected: code === config?.reglages?.langue }, code === config?.langue_systeme ? `${n} (langue du système)` : n)));
+    // Texte brut de Whisper gardé : la séparation des voix seule se refait en minutes, sans retranscrire.
+    const seule = el("input", { type: "checkbox", onchange: () => { langue.disabled = seule.checked; } });
     const choix = await dialogue({ titre: "Refaire la transcription ?", contenu: [
       el("p", {}, `Le texte actuel sera remplacé, y compris vos corrections de texte. Les noms donnés aux voix et vos notes sont gardés. Durée estimée : ${estimation(k)}.`),
+      ...(data.texte_garde ? [el("label", { className: "case" }, seule, "Refaire seulement la séparation des voix (texte gardé, bien plus rapide)")] : []),
       el("label", { for: "combien" }, "Combien de personnes ont parlé ?"), combien,
       el("p", { className: "note-aide", id: "combien-aide" }, "Laissez vide si vous ne savez pas."),
       el("label", { className: "case" }, faibles, "Les voix étaient faibles ou lointaines"),
+      el("label", { for: "pistes-r" }, "Pistes à écouter"), pistes,
       el("label", { for: "langue-r" }, "Langue parlée"), langue],
     boutons: [{ texte: "Annuler", focus: true }, { texte: "Refaire", classe: "principal-btn", valeur: true }] });
     if (!choix) return origine?.focus();
-    transcrire({ ...(Number(combien.value) > 0 ? { personnes: Number(combien.value) } : {}), chuchote: faibles.checked, langue: langue.value });
+    transcrire({ ...(Number(combien.value) > 0 ? { personnes: Number(combien.value) } : {}), chuchote: faibles.checked, pistes: pistes.value,
+      ...(seule.checked ? { separation_seule: true } : { langue: langue.value }) });
   }
   async function supprimer() {  // LI-17, LI-18
     const ok = await dialogue({ titre: `Supprimer « ${data.titre} » ?`, contenu: [el("p", {}, "Le son, le texte et le compte rendu seront effacés de cet ordinateur. Impossible de revenir en arrière.")],
@@ -1489,6 +1540,19 @@ function vueReglages() {
     if (!c) return;
     const r = c.reglages, mac = c.plateforme === "darwin";
     const sauver = async (champs, t) => { const res = await api("/api/configuration", champs); t?.montrer(res); if (!res.erreur) await chargerConfig(); return res; };
+    // Puissance pour la transcription : cœurs et priorité, appliqués en cours de transcription (ressources.py)
+    const tPui = temoin(), nCoeurs = c.coeurs;  // absent si le serveur date d'avant ce réglage : % seul
+    const puissance = el("select", { id: "r-puissance", onchange: () => sauver({ ressources: Number(puissance.value) }, tPui) },
+      ...[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((p) => el("option", { value: p, selected: (r.ressources || 100) === p },
+        nCoeurs ? `${p} % (${Math.max(1, Math.round(nCoeurs * p / 100))} cœur${Math.round(nCoeurs * p / 100) > 1 ? "s" : ""} sur ${nCoeurs})` : `${p} %`)));
+    const basse = el("input", { type: "checkbox", checked: !!r.priorite_basse, onchange: () => sauver({ priorite_basse: basse.checked }, tPui) });
+    const puissanceBloc = el("div", { className: "reglage", id: "puissance" },
+      el("h3", {}, el("label", { for: "r-puissance" }, "Puissance pour la transcription")),
+      el("div", { className: "ligne-r" }, puissance, tPui),
+      el("label", { className: "case" }, basse, "Priorité basse : l'ordinateur reste réactif, la transcription cède la place aux autres applications"),
+      el("p", { className: "note-aide" }, mac
+        ? "Moins de puissance : transcription plus lente, mais ordinateur plus frais et plus stable. La priorité change tout de suite ; le nombre de cœurs, à l'étape suivante."
+        : "Vaut pour la transcription (Whisper) et la séparation des voix. Moins de puissance : plus lent, mais ordinateur plus frais et plus stable. Modifiable pendant une transcription : appliqué en quelques secondes."));
     // Votre nom
     const tNom = temoin();
     const nomC = el("input", { id: "r-nom", type: "text", value: c.moi, autocomplete: "off" });
@@ -1647,7 +1711,7 @@ function vueReglages() {
       el("h2", {}, "Réglages"),
       el("div", { className: "reglage" }, el("h3", {}, el("label", { for: "r-nom" }, "Votre nom")), el("div", { className: "ligne-r" }, nomC, tNom),
         el("p", { className: "note-aide" }, "Ce qui est dit dans votre micro sera noté sous ce nom.")),
-      dossier, agendaBloc, voixBloc,
+      dossier, puissanceBloc, agendaBloc, voixBloc,
       el("div", { className: "reglage" }, el("h3", {}, el("label", { for: "r-mots" }, "Mots à bien écrire")),
         el("p", { className: "note-aide" }, "Noms de clients, de produits, sigles. Un par ligne. Pris en compte pour les prochaines transcriptions."), mots, tMots),
       avance);

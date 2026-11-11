@@ -103,3 +103,24 @@ def test_sans_separation_moi_et_les_autres():
             locs, separees, *_ = transcrire_simule(d, systeme_parle=True)
         assert locs == {"Moi", "Les autres"} and not separees
         assert json.loads((d / "transcription.json").read_text(encoding="utf-8"))["separation"] is False
+
+
+def test_separer_en_nombre_connu():
+    """Nombre de personnes connu : deux voix proches (cosinus ~0,75) mais distinctes restent deux, à parts réalistes,
+    même si une seule domine les groupes de départ ; les longs tours sont coupés et les tours sans empreinte suivent
+    leur voisin."""
+    rng = np.random.default_rng(3)
+    a = np.zeros(16); a[0] = 1
+    b = np.zeros(16); b[0], b[1] = 0.75, np.sqrt(1 - 0.75 ** 2)
+    tours, vecs = [], []
+    for i in range(60):
+        base = a if i % 3 else b  # a parle 2/3 du temps
+        v = base + rng.normal(0, 0.05, 16)
+        tours.append((i * 5.0, i * 5.0 + 4, 0))  # sherpa a tout mis dans un seul groupe
+        vecs.append(v / np.linalg.norm(v))
+    tours.append((300.0, 300.5, 0)); vecs.append(None)
+    t, e = separation.separer_en(tours, vecs, 2)
+    voix_de = [lbl for *_, lbl in t]
+    assert voix_de[:60] == ["SPEAKER_01" if i % 3 == 0 else "SPEAKER_00" for i in range(60)]
+    assert voix_de[60] == voix_de[59] and set(e) == {"SPEAKER_00", "SPEAKER_01"}
+    assert separation.decouper([(0, 20, 7)]) == [(0, 8, 7), (8, 16, 7), (16, 20, 7)]

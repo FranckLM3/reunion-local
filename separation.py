@@ -18,10 +18,12 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
 import urllib.request
 from pathlib import Path
 
 import reglages
+import ressources
 
 # ---------------------------------------------------------------- méthode libre (sherpa-onnx)
 
@@ -39,6 +41,10 @@ DUREE_MIN_EMPREINTE = 1.0  # s : en dessous, l'empreinte d'un tour est trop brui
 # ponytail: seuils fixes recalés sur 3 extraits de nos réunions ; une voix de moins de DUREE_MIN_VOIX est fondue.
 FUSION = float(os.environ.get("REUNION_FUSION_DIAR", "0.7"))  # cosinus au-delà duquel deux groupes = une voix
 DUREE_MIN_VOIX = 10.0  # s
+# Découpage du son par sherpa, sans rappel : part de l'étape et secondes de calcul par seconde de son (relevé le
+# 11/11 : 44 min pour 60 min de son, 20 cœurs). Ce n'est qu'une estimation pour la barre.
+DECOUPAGE = 0.45
+RYTHME_DECOUPAGE = 0.75
 
 # Méthode -> (modèle d'empreintes, Mo à télécharger). Le modèle d'empreintes désigne aussi la banque de voix.
 METHODES = {"libre": ("titanet-small", SEGMENTATION[2] + EMPREINTE[2]),
@@ -155,14 +161,17 @@ def _sherpa(seg: Path, emb: Path, fils: int):
     return so.OfflineSpeakerDiarization(cfg)
 
 
-def vecteurs(audio, tours, emb: Path, fils: int) -> list:
-    """Empreinte normée de chaque tour (None sous DUREE_MIN_EMPREINTE : trop bruitée)."""
+def vecteurs(audio, tours, emb: Path, fils: int, avance=None) -> list:
+    """Empreinte normée de chaque tour (None sous DUREE_MIN_EMPREINTE : trop bruitée). `avance(fraction)` suit le
+    calcul."""
     import numpy as np
     import sherpa_onnx as so
 
     ext = so.SpeakerEmbeddingExtractor(so.SpeakerEmbeddingExtractorConfig(model=str(emb), num_threads=fils))
     sortie = []
-    for d, f, _ in tours:
+    for i, (d, f, _) in enumerate(tours):
+        if avance and i % 50 == 0:
+            avance(i / len(tours))
         if f - d < DUREE_MIN_EMPREINTE:
             sortie.append(None)
             continue
@@ -176,7 +185,8 @@ def vecteurs(audio, tours, emb: Path, fils: int) -> list:
 
 def regrouper(tours, vecs, cible: int | None, fusion: float = FUSION, duree_min: float = DUREE_MIN_VOIX):
     """Fusionne les groupes de sherpa (son regroupement natif se trompe sur nos réunions), dans cet ordre : deux
-    voix qui se ressemblent au-delà de `fusion` n'en font qu'une ; une voix de moins de `duree_min` s rejoint la
+    voix qui se ressemblent au-delà de `fusion` n'en font qu'une (sauf à descendre sous `cible`, le nombre de
+    personnes indiqué) ; une voix de moins de `duree_min` s rejoint la
     plus proche ; enfin les deux plus proches fusionnent tant qu'il y en a plus que `cible`.
     Rend (tours renumérotés, centroïdes normés)."""
     import numpy as np
@@ -199,7 +209,9 @@ def regrouper(tours, vecs, cible: int | None, fusion: float = FUSION, duree_min:
     while len(somme) > 1:
         sim, a, b = proches(list(somme))
         petits = [l for l in duree if duree[l] < duree_min]
-        if sim > fusion:
+        # Nombre de personnes connu : jamais moins de voix que lui. Le 10/11, deux personnes sur le même micro de
+        # salle se ressemblaient à 0,77 (> fusion) : une seule voix pour 58 min sur 59.
+        if sim > fusion and not (cible and len(duree) <= cible):
             pass  # les deux voix les plus proches n'en font qu'une
         elif petits:  # une voix trop courte rejoint la plus proche
             _, a, b = proches([min(petits, key=duree.get)])
@@ -221,15 +233,97 @@ def regrouper(tours, vecs, cible: int | None, fusion: float = FUSION, duree_min:
             {f"SPEAKER_{ordre[g]:02d}": [float(x) for x in v / np.linalg.norm(v)] for g, v in somme.items()})
 
 
-def diariser_libre(wav: Path, nb: int | None, maxi: int | None) -> tuple[list, dict[str, list]]:
+def decouper(tours, longueur: float = 8.0):
+    """Tours de plus de `longueur` s coupés en morceaux (même groupe) : une empreinte par morceau, plus fine, et
+    TitaNet décroche sur les très longs passages."""
+    sortie = []
+    for d, f, l in tours:
+        while f - d > longueur:
+            sortie.append((d, d + longueur, l))
+            d += longueur
+        sortie.append((d, f, l))
+    return sortie
+
+
+def separer_en(tours, vecs, nb: int, essais: int = 20):
+    """Nombre de personnes connu : k-moyennes (cosinus, pondérées par la durée) sur les empreintes des tours, en
+    `nb` voix. Le 11/11, la fusion de proche en proche des groupes de sherpa rendait 59 min pour une voix et 8 s
+    pour l'autre ; ce regroupement direct rendait 31 min / 13 min, fidèle aux échanges.
+    Rend (tours renumérotés, centroïdes normés), comme regrouper."""
+    import numpy as np
+
+    idx = [i for i, v in enumerate(vecs) if v is not None]
+    k = min(nb, len(idx))
+    if k < 2:
+        return regrouper(tours, vecs, nb)
+    X = np.array([vecs[i] for i in idx])
+    w = np.array([tours[i][1] - tours[i][0] for i in idx], dtype=float)
+    rng = np.random.default_rng(0)  # même entrée, même résultat
+    meilleur = None
+    for _ in range(essais):
+        C = [X[rng.choice(len(X), p=w / w.sum())]]  # départ k-means++ : centres éloignés les uns des autres
+        while len(C) < k:
+            dist = (1 - np.max(X @ np.array(C).T, axis=1)).clip(0) * w
+            C.append(X[rng.choice(len(X), p=dist / dist.sum())] if dist.sum() > 0 else X[rng.integers(len(X))])
+        C = np.array(C)
+        for _ in range(100):
+            lab = np.argmax(X @ C.T, axis=1)
+            neuf = np.array([(w[lab == j, None] * X[lab == j]).sum(0) if (lab == j).any() else C[j]
+                             for j in range(k)])
+            neuf /= np.linalg.norm(neuf, axis=1, keepdims=True)
+            if np.allclose(neuf, C):
+                break
+            C = neuf
+        lab = np.argmax(X @ C.T, axis=1)
+        score = float((w * np.max(X @ C.T, axis=1)).sum())
+        if meilleur is None or score > meilleur[0]:
+            meilleur = (score, lab, C)
+    _, lab, C = meilleur
+    duree = [float(w[lab == j].sum()) for j in range(k)]
+    gardes = sorted((j for j in range(k) if duree[j] > 0), key=lambda j: -duree[j])
+    ordre = {j: r for r, j in enumerate(gardes)}
+    finals = [None] * len(tours)
+    for i, j in zip(idx, lab):
+        finals[i] = ordre[int(j)]
+    for i, g in enumerate(finals):  # tour trop court pour une empreinte : voix du voisin le plus proche
+        if g is None:
+            finals[i] = finals[min(idx, key=lambda j: abs(j - i))]
+    return ([(d, f, f"SPEAKER_{g:02d}") for (d, f, _), g in zip(tours, finals)],
+            {f"SPEAKER_{ordre[j]:02d}": [float(x) for x in C[j]] for j in gardes})
+
+
+def diariser_libre(wav: Path, nb: int | None, maxi: int | None, avance=None) -> tuple[list, dict[str, list]]:
     seg, emb = fichier_libre(SEGMENTATION[0]), fichier_libre(EMPREINTE[0])
     if not prete("libre"):  # absents ou altérés : repris et vérifiés
         telecharger_libre()
     audio = lire_16k(Path(wav))
-    fils = os.cpu_count() or 1
-    res = _sherpa(seg, emb, fils).process(audio).sort_by_start_time()
-    tours = [(s.start, s.end, s.speaker) for s in res]
-    return regrouper(tours, vecteurs(audio, tours, emb, fils), nb or maxi)
+    fils = ressources.coeurs_alloues()  # réglage « Puissance pour la transcription »
+    # Avancement (sinon l'étape restait figée plus d'une heure, le 10/11). sherpa découpe d'abord tout le son sans
+    # rien signaler (44 min pour 1 h de réunion le 11/11, ~45 % de l'étape) : estimé au temps écoulé, plafonné ;
+    # puis il compte ses morceaux (jusqu'à 90 %) ; les empreintes des tours, le reste.
+    import threading
+
+    compte = threading.Event()
+    if avance:
+        def estimer(debut=time.monotonic(), prevu=max(len(audio) / SR * RYTHME_DECOUPAGE, 1.0)):
+            while not compte.wait(5):
+                avance(DECOUPAGE * min((time.monotonic() - debut) / prevu, 0.95))
+        threading.Thread(target=estimer, daemon=True).start()
+
+    def rappel(fait, total):
+        if not compte.is_set():
+            compte.set()
+        if avance and total:
+            avance(DECOUPAGE + (0.9 - DECOUPAGE) * fait / total)
+        return 0  # non nul : sherpa abandonnerait
+
+    try:
+        res = _sherpa(seg, emb, fils).process(audio, callback=rappel).sort_by_start_time()
+    finally:
+        compte.set()
+    tours = decouper([(s.start, s.end, s.speaker) for s in res])
+    vecs = vecteurs(audio, tours, emb, fils, avance and (lambda f: avance(0.9 + 0.1 * f)))
+    return separer_en(tours, vecs, nb) if nb else regrouper(tours, vecs, maxi)
 
 
 # ---------------------------------------------------------------- méthode pyannote (avec clé)
@@ -336,6 +430,10 @@ def modele_empreintes(m: str | None) -> str:
     return METHODES.get(m or "", METHODES["pyannote"])[0]
 
 
-def diariser(wav: Path, nb: int | None, maxi: int | None, m: str = "libre") -> tuple[list, dict[str, list]]:
-    """Seule entrée de la séparation des voix : nb = nombre exact s'il est connu, sinon maxi = plafond."""
-    return (diariser_pyannote if m == "pyannote" else diariser_libre)(wav, nb, maxi)
+def diariser(wav: Path, nb: int | None, maxi: int | None, m: str = "libre",
+             avance=None) -> tuple[list, dict[str, list]]:
+    """Seule entrée de la séparation des voix : nb = nombre exact s'il est connu, sinon maxi = plafond.
+    `avance(fraction)` suit le calcul (méthode libre seulement ; pyannote ne le donne pas)."""
+    if m == "pyannote":
+        return diariser_pyannote(wav, nb, maxi)
+    return diariser_libre(wav, nb, maxi, avance)

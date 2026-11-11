@@ -69,10 +69,10 @@ def test_choix_du_moteur():
 
 def test_faster_whisper_simule_et_repli_processeur():
     appels = []
-    son = object()
+    son = [0.0] * 16000  # 1 s ; lu en entier, jamais coupé hors reprise
 
     class Modele:
-        def __init__(self, repo, device, compute_type):
+        def __init__(self, repo, device, compute_type, **_):
             self.device = device
             appels.append((repo, device, compute_type))
 
@@ -86,7 +86,7 @@ def test_faster_whisper_simule_et_repli_processeur():
                 return casse(), None
             mot = types.SimpleNamespace(start=0.5, end=0.9, word=" Bonjour")
             return iter([types.SimpleNamespace(text=" Bonjour", avg_logprob=-0.2, compression_ratio=1.1,
-                                               words=[mot])]), None
+                                               end=0.9, words=[mot])]), None
 
     faux = {"faster_whisper": types.SimpleNamespace(WhisperModel=Modele),
             "ctranslate2": types.SimpleNamespace(get_cuda_device_count=lambda: 1),
@@ -106,7 +106,7 @@ def test_faster_whisper_simule_et_repli_processeur():
                 sys.modules[k] = v
         transcribe.modele_faster.cache_clear()
     assert [(a[1], a[2]) for a in appels] == [("cuda", "float16"), ("cpu", "int8")]
-    assert segs == [{"text": " Bonjour", "avg_logprob": -0.2, "compression_ratio": 1.1,
+    assert segs == [{"text": " Bonjour", "avg_logprob": -0.2, "compression_ratio": 1.1, "end": 0.9,
                      "words": [{"start": 0.5, "end": 0.9, "word": " Bonjour"}]}]
 
 

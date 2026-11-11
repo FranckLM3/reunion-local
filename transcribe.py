@@ -32,6 +32,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 import reglages
+import reprise
+import ressources
 import separation
 import voix
 from separation import diariser, jeton_hf  # noqa: F401  (diariser : point d'entrée unique, remplaçable)
@@ -87,6 +89,8 @@ PRENOM = prenom()
 
 # Niveau sous lequel une tranche ne peut pas contenir de parole (la voix tourne autour de -40 à -10 dBFS).
 SEUIL_SILENCE_DB = -55.0
+# Texte brut de Whisper par piste, gardé dans la réunion : « Refaire seulement la séparation des voix » s'en sert.
+TEXTE_BRUT = "texte-brut.json"
 TRAME = 0.1  # secondes par point de l'enveloppe sonore
 # Coupe le grave et l'aigu hors voix, débruite, puis remonte le niveau par fenêtres de 3 s (gain max x40).
 FILTRE_REHAUSSE = "highpass=f=150,lowpass=f=6000,afftdn=nf=-30,dynaudnorm=f=150:g=15:p=0.9:m=40"
@@ -315,50 +319,93 @@ OPTIONS_WHISPER = {"condition_on_previous_text": False, "no_speech_threshold": 0
                    "hallucination_silence_threshold": 2.0}
 
 
-def segments_mlx(wav: Path, prompt: str, repo: str, langue: str | None) -> list[dict]:
+def brut_de(s: dict, decalage: float = 0.0) -> dict:
+    """Segment Whisper réduit à ce que transcrire() lit, minutages décalés de `decalage` s (reprise en cours de
+    piste) : c'est aussi la forme gardée pour la reprise."""
+    return {"text": s["text"], "avg_logprob": s.get("avg_logprob", 0), "compression_ratio": s.get("compression_ratio", 0),
+            "end": s.get("end", 0) + decalage,
+            "words": [{"start": w["start"] + decalage, "end": w["end"] + decalage, "word": w["word"]}
+                      for w in s.get("words") or []]}
+
+
+def segments_mlx(wav: Path, prompt: str, repo: str, langue: str | None, garde=None) -> list[dict]:
+    """`garde` : (Reprise, piste). mlx-whisper rend la piste d'un bloc : elle est gardée une fois finie."""
+    if garde:
+        deja, fini = garde[0].segments(garde[1])
+        if fini:
+            print("Piste déjà transcrite avant l'arrêt : reprise.")
+            print("100%|", flush=True)
+            return deja
     import mlx_whisper
 
     # verbose=False : barre d'avancement sur la sortie d'erreur, lue par le serveur (« 45%| »).
     # Révision épinglée : le dossier de cette révision, pas « main ».
     epingle = depot_cache(repo) / "snapshots" / REVISIONS.get(repo, "")
     chemin = str(epingle) if repo in REVISIONS and epingle.is_dir() else repo
-    return mlx_whisper.transcribe(str(wav), path_or_hf_repo=chemin, language=langue, initial_prompt=prompt or None,
-                                  logprob_threshold=-1.0, verbose=False, **OPTIONS_WHISPER)["segments"]
+    segs = [brut_de(s) for s in mlx_whisper.transcribe(
+        str(wav), path_or_hf_repo=chemin, language=langue, initial_prompt=prompt or None,
+        logprob_threshold=-1.0, verbose=False, **OPTIONS_WHISPER)["segments"]]
+    if garde:
+        garde[0].recommencer(garde[1])
+        for s in segs:
+            garde[0].ajouter(garde[1], s)
+        garde[0].finir(garde[1])
+    return segs
 
 
 @functools.cache
-def modele_faster(repo: str, appareil: str, calcul: str):
+def modele_faster(repo: str, appareil: str, calcul: str, fils: int = 0):
     from faster_whisper import WhisperModel
     from huggingface_hub import snapshot_download
 
     # Dossier local de la révision figée : WhisperModel(repo) irait chercher la dernière version du dépôt.
-    return WhisperModel(snapshot_download(repo, revision=REVISIONS.get(repo)), device=appareil, compute_type=calcul)
+    return WhisperModel(snapshot_download(repo, revision=REVISIONS.get(repo)), device=appareil, compute_type=calcul,
+                        cpu_threads=fils)
 
 
-def segments_faster(wav: Path, prompt: str, repo: str, langue: str | None) -> list[dict]:
+def segments_faster(wav: Path, prompt: str, repo: str, langue: str | None, garde=None) -> list[dict]:
     """faster-whisper rendu sous la forme de mlx-whisper. Carte graphique NVIDIA si elle répond,
-    sinon processeur en int8 (sous Windows, les bibliothèques CUDA manquent souvent)."""
+    sinon processeur en int8 (sous Windows, les bibliothèques CUDA manquent souvent).
+    `garde` : (Reprise, piste). Chaque segment y est écrit dès qu'il sort ; après un arrêt, seule la suite de
+    l'audio est transcrite (le repli sur le processeur repart lui aussi du dernier segment gardé)."""
     import ctranslate2
 
     # Son décodé ici plutôt que passé en chemin : faster-whisper 1.2.1 appelle av.open(metadata_errors=...), argument
     # supprimé par PyAV 19 (sa dépendance « av>=11 » prend pourtant cette version).
     audio = separation.lire_16k(wav)
+    total = len(audio) / separation.SR
     essais = [("cpu", "int8")]
     if not os.environ.get("REUNION_CPU") and ctranslate2.get_cuda_device_count() > 0:
         essais.insert(0, ("cuda", "float16"))
     for i, (appareil, calcul) in enumerate(essais):
+        deja, fini = garde[0].segments(garde[1]) if garde else ([], False)
+        t0 = deja[-1]["end"] if deja else 0.0
+        if fini or (deja and total - t0 < 1):
+            print("Piste déjà transcrite avant l'arrêt : reprise.")
+            print("100%|", flush=True)
+            return deja
+        if deja:
+            print(f"Reprise de la piste à {hms(t0)} : le début était transcrit avant l'arrêt.")
+            if total:  # la barre repart d'où elle en était, pas du début de la piste
+                print(f"{min(100, round(t0 / total * 100))}%|", flush=True)
         try:
-            segs, info = modele_faster(repo, appareil, calcul).transcribe(
-                audio, language=langue, initial_prompt=prompt or None, log_prob_threshold=-1.0,
-                vad_filter=False, **OPTIONS_WHISPER)
-            duree = getattr(info, "duration", 0) or 0
-            sortie = []
+            # Autant de fils que de cœurs permis par le réglage « Puissance pour la transcription ».
+            segs, info = modele_faster(repo, appareil, calcul, ressources.coeurs_alloues()).transcribe(
+                audio[int(t0 * separation.SR):] if t0 else audio, language=langue, initial_prompt=prompt or None,
+                log_prob_threshold=-1.0, vad_filter=False, **OPTIONS_WHISPER)
+            sortie = list(deja)
             # Consommé ici : une erreur CUDA (bibliothèque absente) ne survient qu'au premier segment.
             for s in segs:
-                sortie.append({"text": s.text, "avg_logprob": s.avg_logprob, "compression_ratio": s.compression_ratio,
-                               "words": [{"start": w.start, "end": w.end, "word": w.word} for w in s.words or []]})
-                if duree:
-                    print(f"{min(100, round(s.end / duree * 100))}%|", flush=True)  # même forme que mlx
+                seg = brut_de({"text": s.text, "avg_logprob": s.avg_logprob, "compression_ratio": s.compression_ratio,
+                               "end": s.end, "words": [{"start": w.start, "end": w.end, "word": w.word}
+                                                       for w in s.words or []]}, t0)
+                sortie.append(seg)
+                if garde:
+                    garde[0].ajouter(garde[1], seg)
+                if total:
+                    print(f"{min(100, round(seg['end'] / total * 100))}%|", flush=True)  # même forme que mlx
+            if garde:
+                garde[0].finir(garde[1])
             return sortie
         except Exception as e:
             if i == len(essais) - 1:
@@ -368,8 +415,10 @@ def segments_faster(wav: Path, prompt: str, repo: str, langue: str | None) -> li
     return []
 
 
-def transcrire(wav: Path, prompt: str, repo: str, moteur: str = "mlx", langue: str | None = "fr") -> list[dict]:
-    brut = (segments_mlx if moteur == "mlx" else segments_faster)(wav, prompt, repo, langue)
+def transcrire(wav: Path, prompt: str, repo: str, moteur: str = "mlx", langue: str | None = "fr",
+               garde=None) -> list[dict]:
+    """`garde` : (Reprise, piste) pour reprendre après un arrêt ; None, rien n'est gardé."""
+    brut = (segments_mlx if moteur == "mlx" else segments_faster)(wav, prompt, repo, langue, garde)
     # Whisper invente du texte sur le silence (« Grazie a tutti », « Sous-titrage... ») et part parfois
     # en boucle (« WB, WB, WB... ») : on écarte les tranches muettes et les segments trop répétitifs.
     env = enveloppe(wav)
@@ -556,6 +605,20 @@ def reconnaitre(empreintes: dict[str, list], anciens: dict[str, list], banque: d
     return appliques, props
 
 
+def garder_eveille() -> None:
+    """Pas de veille tant que la transcription tourne : le 10/11, la veille moderne de 02:40 à 08:20 a porté une
+    transcription refaite à 10 h 40. L'écran peut s'éteindre. Seule la veille automatique est bloquée : le bouton
+    d'alimentation, le capot ou « Mettre en veille » endorment toujours le PC, et l'arrêt de la transcription lève
+    le blocage."""
+    if sys.platform == "win32":
+        import ctypes
+
+        # ES_CONTINUOUS | ES_SYSTEM_REQUIRED, valable jusqu'à la fin du processus.
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["caffeinate", "-imsu", "-w", str(os.getpid())])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("dossier", type=Path, nargs="?")
@@ -564,6 +627,10 @@ def main() -> int:
     ap.add_argument("--personnes", type=int, help="nombre de personnes qui ont parlé, toi compris")
     ap.add_argument("--max", type=int, help="nombre maximal de locuteurs (invités de l'agenda)")
     ap.add_argument("--sans-locuteurs", action="store_true", help="désactive la séparation des voix")
+    ap.add_argument("--separation-seule", action="store_true",
+                    help="refait seulement la séparation des voix, avec le texte gardé de la transcription précédente")
+    ap.add_argument("--pistes", choices=["micro", "systeme"],
+                    help="ne transcrit que cette piste (par défaut : les deux) ; micro seul = tout le monde dans la pièce")
     ap.add_argument("--chuchote", action="store_true",
                     help="voix faibles ou lointaines : micro rehaussé même en visio (le présentiel l'est toujours)")
     r = reglages.lire()
@@ -607,6 +674,8 @@ def main() -> int:
         return 0
     if a.dossier is None:
         ap.error("dossier manquant")
+    garder_eveille()
+    ressources.surveiller()  # cœurs et priorité du réglage, réappliqués s'il change en cours de route
 
     # Méthode de séparation (Q3) : sans elle, « Moi » pour le micro et « Les autres » pour le son de l'ordinateur.
     diar = None if a.sans_locuteurs else separation.methode(r)
@@ -626,7 +695,7 @@ def main() -> int:
 
     dossier = a.dossier.expanduser().resolve()
     fichiers = {"systeme": dossier / "systeme.wav", "micro": dossier / "micro.wav"}
-    fichiers = {cle: f for cle, f in fichiers.items() if f.exists()}
+    fichiers = {cle: f for cle, f in fichiers.items() if f.exists() and a.pistes in (None, cle)}
     if not fichiers:
         print(f"Aucun fichier audio dans {dossier}", file=sys.stderr)
         signaler("@echec son_illisible")
@@ -641,23 +710,61 @@ def main() -> int:
     for wav in fichiers.values():
         reparer(wav)
     durees = {cle: max(wav.stat().st_size - 4096, 0) for cle, wav in fichiers.items()}  # proportions seulement
+    # Piste muette (moins de 2 s audibles) : pas transcrite. Le 10/11, 69 min de zéros sur le son de l'ordinateur
+    # (capture reprise sur une autre sortie) ont occupé Whisper plus de 2 h sans un mot, avancement bloqué à 5 %.
     if not sum(durees.values()):
         signaler("@echec son_vide")
         return 1
+    muettes = set()
+    for cle, wav in fichiers.items():
+        try:
+            if durees[cle] and audible_s(wav) < 2:
+                muettes.add(cle)
+        except Exception:  # illisible ici : transcrite comme avant, l'erreur éventuelle viendra de Whisper
+            pass
+    if len(muettes) == len(fichiers):
+        signaler("@echec son_vide")
+        return 1
+    for cle in muettes:
+        durees[cle] = 0
+
+    texte_garde = None
+    if a.separation_seule:
+        try:
+            texte_garde = json.loads((dossier / TEXTE_BRUT).read_text(encoding="utf-8"))["pistes"]
+        except (OSError, ValueError, KeyError, TypeError):
+            print("Texte de la transcription précédente absent : refaites la transcription complète.", file=sys.stderr)
+            signaler("@echec texte_absent")
+            return 1
+        print("Séparation des voix seule : le texte de la transcription précédente est gardé.")
 
     signaler("@etape 2")
     prompt = lire_prompt(a.vocabulaire)
+    # Étapes déjà faites avant un arrêt (plantage, outil fermé, coupure) : gardées, sauf si un réglage a changé.
+    try:
+        rep = reprise.Reprise(dossier, reprise.signature(modele, moteur, langue, prompt, {
+            "presentiel": a.presentiel, "chuchote": a.chuchote, "pistes": a.pistes, "nb": a.nb,
+            "personnes": a.personnes, "max": a.max, "separation": diar, "separation_seule": a.separation_seule},
+            fichiers))
+    except OSError as e:  # dossier en lecture seule : la transcription passe, sans reprise possible
+        print(f"Reprise impossible en cas d'arrêt ({e}).")
+        rep = None
     pos = PART_PREPARATION
     traitees: dict[str, tuple] = {}  # piste -> (wav transcrit, segments, à séparer, nom fixe, nombre de voix)
     for cle, wav in fichiers.items():
+        if cle in muettes:
+            print(f"Piste {cle} muette : pas de transcription.")
+            traitees[cle] = (wav, [], False, "Les autres" if cle == "systeme" else a.moi, None)
+            continue
         # La piste du Mac est gardée en présentiel : réunion mixte (salle + visio). Sans distants, elle est
         # silencieuse et le filtre de silence n'en tire rien.
         # Son de l'ordinateur vide : tout s'est dit dans la pièce, le micro porte plusieurs voix. Le 03/11, un
         # atelier diffusé sur Meet (distants muets, case présentiel oubliée) a été attribué en entier au
         # propriétaire. Le micro est alors traité comme en présentiel ; son nom ne revient que par son empreinte.
         # Seulement si le son de l'ordinateur existe et n'a presque rien entendu (moins de 20 s ou de 1 %).
-        salle = cle == "micro" and not a.presentiel and "systeme" in fichiers and (
-            audible_s(fichiers["systeme"]) < 20 or part_audible(fichiers["systeme"]) < 0.01)
+        # Micro seul choisi (« Pistes à écouter ») : tout le monde était dans la pièce.
+        salle = cle == "micro" and not a.presentiel and (a.pistes == "micro" or "systeme" in fichiers and (
+            "systeme" in muettes or audible_s(fichiers["systeme"]) < 20 or part_audible(fichiers["systeme"]) < 0.01))
         if salle:
             print("Son de l'ordinateur vide : voix séparées sur le micro." if diar else
                   "Son de l'ordinateur vide : piste micro notée « Moi » (séparation des voix indisponible).")
@@ -670,20 +777,42 @@ def main() -> int:
             a.personnes if salle else None)
 
         if cle == "micro" and (a.presentiel or a.chuchote or salle):
-            print("Rehaussement du micro (voix basses et lointaines)...")
-            try:
-                wav = rehausser(wav)
-            except (OSError, subprocess.CalledProcessError) as e:
-                print(f"  Rehaussement impossible ({e}), piste brute gardée.")
+            copie = wav.with_name(wav.stem + "-rehausse.wav")
+            if rep and rep.rehausse_pret(copie):
+                print("Rehaussement du micro : déjà fait avant l'arrêt, reprise.")
+                wav = copie
+            else:
+                print("Rehaussement du micro (voix basses et lointaines)...")
+                try:
+                    wav = rehausser(wav)
+                    if rep:
+                        rep.rehausse_fait()
+                except (OSError, subprocess.CalledProcessError) as e:
+                    print(f"  Rehaussement impossible ({e}), piste brute gardée.")
         part = PART_TRANSCRIPTION * durees[cle] / sum(durees.values())
         signaler(f"@piste {pos:.3f} {pos + part:.3f}")
-        print(f"Transcription de la piste {cle}...")
-        traitees[cle] = (wav, transcrire(wav, prompt, modele, moteur, langue), separer, nom_fixe, nb)
+        if texte_garde is not None:  # « Refaire seulement la séparation des voix » : Whisper n'est pas relancé
+            print(f"Texte de la piste {cle} gardé de la transcription précédente.")
+            segs = texte_garde.get(cle, [])
+        else:
+            print(f"Transcription de la piste {cle}...")
+            segs = transcrire(wav, prompt, modele, moteur, langue, rep and (rep, cle))
+        traitees[cle] = (wav, segs, separer, nom_fixe, nb)
         # TR-06 : texte déjà prêt, sans noms, lu par la page pendant la suite du calcul.
         partiel = sorted(({"debut": s["debut"] + debuts.get(f"{c}_debut", origine) - origine, "texte": s["texte"]}
                           for c, t in traitees.items() for s in t[1]), key=lambda b: b["debut"])
         reglages.ecrire_atomique(dossier / "transcription.partielle.json", json.dumps(partiel, ensure_ascii=False))
         pos += part
+
+    if texte_garde is None:
+        # Texte brut de Whisper gardé (TEXTE_BRUT) : la séparation des voix pourra être refaite seule, en minutes au
+        # lieu d'heures. Écrit avant la séparation : un arrêt pendant celle-ci ne le perd pas.
+        try:
+            reglages.ecrire_atomique(dossier / TEXTE_BRUT, json.dumps(
+                {"version": 1, "modele": modele, "pistes": {cle: t[1] for cle, t in traitees.items()}},
+                ensure_ascii=False))
+        except OSError as e:
+            print(f"Texte brut non gardé ({e}) : refaire la séparation seule ne sera pas possible.")
 
     signaler("@etape 3")
     signaler(f"@avance {pos:.3f}")
@@ -695,12 +824,27 @@ def main() -> int:
     for cle, (wav, segs, separer, nom_fixe, nb) in traitees.items():
         tours = None
         if cle in a_separer:
-            print(f"Séparation des voix, piste {cle}...")
-            try:
-                # --max compte les invités de l'agenda : il ne vaut que pour le son de l'ordinateur.
-                tours, embs = diariser(wav, nb, a.max if cle == "systeme" else None, diar)
-            except Exception as e:
-                print(f"  Séparation impossible ({e}). Piste gardée sans séparation.")
+            gardee = rep.separation(cle) if rep else None
+            if gardee:
+                print(f"Séparation des voix, piste {cle} : déjà faite avant l'arrêt, reprise.")
+                tours, embs = gardee
+            else:
+                print(f"Séparation des voix, piste {cle}...")
+                part_sep, dernier = PART_SEPARATION / len(a_separer), [-1.0]
+
+                def avance(f, depart=pos, part_sep=part_sep, dernier=dernier):
+                    v = round(depart + part_sep * min(max(f, 0.0), 1.0), 3)
+                    if v > dernier[0]:  # une ligne par millième d'avancement global, pas davantage
+                        dernier[0] = v
+                        signaler(f"@avance {v:.3f}")
+
+                try:
+                    # --max compte les invités de l'agenda : il ne vaut que pour le son de l'ordinateur.
+                    tours, embs = diariser(wav, nb, a.max if cle == "systeme" else None, diar, avance)
+                    if rep:
+                        rep.garder_separation(cle, tours, embs)
+                except Exception as e:
+                    print(f"  Séparation impossible ({e}). Piste gardée sans séparation.")
             pos += PART_SEPARATION / len(a_separer)
             signaler(f"@avance {pos:.3f}")
         if tours:
@@ -752,6 +896,8 @@ def main() -> int:
     (dossier / "transcription.partielle.json").unlink(missing_ok=True)
     ecrire(dossier, blocs, source, separation=bool(diar), voix=voix_reunion, propositions=propositions,
            empreintes=separation.modele_empreintes(diar))
+    if rep:  # transcription écrite : plus rien à reprendre
+        rep.effacer()
     print(f"Transcription écrite : {dossier / 'transcription.md'}")
     return 0
 
